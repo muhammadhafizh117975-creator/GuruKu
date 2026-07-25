@@ -1,0 +1,6 @@
+{
+  "name": "GuruKu",
+  "description": "Sistem Manajemen Sekolah & Akademik GuruKu - Portal Guru & Admin (Modul Ajar, Nilai, Absensi, Jurnal, Supabase & Google Drive)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
