@@ -140,8 +140,10 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 2. TABLE PROFILES
 CREATE TABLE IF NOT EXISTS public.profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  id TEXT PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
+  username TEXT UNIQUE,
+  password TEXT,
   full_name TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('admin', 'guru')),
   nip_nuptk TEXT,
@@ -151,6 +153,15 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Seed Default Admin
+INSERT INTO public.profiles (id, email, username, password, full_name, role, nip_nuptk, phone)
+VALUES ('user_admin_01', 'admin@guruku.sch.id', 'admin', 'admin123', 'Administrator Sekolah', 'admin', '19800101 200501 1 001', '081234567890')
+ON CONFLICT (id) DO NOTHING;
+
+-- Enable RLS and grant public access
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all operations on profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
 
 -- 3. TABLE SUBJECTS (MATA PELAJARAN)
 CREATE TABLE IF NOT EXISTS public.subjects (

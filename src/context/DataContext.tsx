@@ -334,23 +334,73 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     showSuccessToast('Tahun Pelajaran berhasil dihapus.');
   };
 
+  // Fetch teachers from Supabase on mount if available
+  useEffect(() => {
+    const fetchTeachersFromSupabase = async () => {
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('role', 'guru');
+        if (data && !error && data.length > 0) {
+          const fetched: Profile[] = data.map((d: any) => ({
+            id: d.id,
+            email: d.email,
+            username: d.username,
+            fullName: d.full_name,
+            role: d.role,
+            nipNuptk: d.nip_nuptk,
+            phone: d.phone,
+            password: d.password,
+            avatarUrl: d.avatar_url,
+            avatarDriveId: d.avatar_drive_id,
+            createdAt: d.created_at,
+            updatedAt: d.updated_at
+          }));
+          setTeachers(fetched);
+          localStorage.setItem('guruku_teachers', JSON.stringify(fetched));
+        }
+      }
+    };
+    fetchTeachersFromSupabase();
+  }, []);
+
   // Teacher Actions
   const addTeacher = (teacher: Profile) => {
     setTeachers((prev) => {
       if (prev.some((t) => t.id === teacher.id)) return prev;
       return [teacher, ...prev];
     });
+    notifyBroadcastSync();
     logActivity('TAMBAH_GURU', `Menambahkan data akun guru ${teacher.fullName}`);
   };
 
   const updateTeacher = (id: string, updated: Partial<Profile>) => {
     setTeachers((prev) => prev.map((t) => (t.id === id ? { ...t, ...updated } : t)));
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from('profiles').update({
+        full_name: updated.fullName,
+        username: updated.username,
+        email: updated.email,
+        nip_nuptk: updated.nipNuptk,
+        phone: updated.phone,
+        updated_at: new Date().toISOString()
+      }).eq('id', id).then(() => {});
+    }
+    notifyBroadcastSync();
     logActivity('UBAH_GURU', `Memperbarui data guru ${updated.fullName || ''}`);
     showSuccessToast('Data guru berhasil diperbarui.');
   };
 
   const deleteTeacher = (id: string) => {
     setTeachers((prev) => prev.filter((t) => t.id !== id));
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from('profiles').delete().eq('id', id).then(() => {});
+    }
+    notifyBroadcastSync();
     logActivity('HAPUS_GURU', `Menghapus data guru`);
     showSuccessToast('Data guru berhasil dihapus.');
   };

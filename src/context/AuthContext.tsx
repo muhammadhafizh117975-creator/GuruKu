@@ -57,17 +57,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .from('profiles')
           .select('*')
           .or(`email.ilike.${cleanInput},username.ilike.${cleanInput}`)
-          .single();
+          .maybeSingle();
 
         if (data && !error) {
+          if (data.password && data.password !== _password) {
+            showErrorToast('Kata sandi (password) yang Anda masukkan tidak sesuai.');
+            setLoading(false);
+            return false;
+          }
+
           const profile: Profile = {
             id: data.id,
             email: data.email,
-            username: data.username,
+            username: data.username || cleanInput,
             fullName: data.full_name,
             role: data.role,
             nipNuptk: data.nip_nuptk,
             phone: data.phone,
+            password: data.password || _password,
             avatarUrl: data.avatar_url,
             avatarDriveId: data.avatar_drive_id,
             createdAt: data.created_at,
@@ -165,20 +172,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const supabase = getSupabaseClient();
     if (supabase) {
-      await supabase.from('profiles').insert([{
+      const { error } = await supabase.from('profiles').insert([{
         id: newGuru.id,
         email: newGuru.email,
         username: newGuru.username,
+        password: newGuru.password,
         full_name: newGuru.fullName,
         role: 'guru',
         nip_nuptk: newGuru.nipNuptk,
         phone: newGuru.phone,
         avatar_url: newGuru.avatarUrl,
-        created_at: newGuru.createdAt
+        created_at: newGuru.createdAt,
+        updated_at: newGuru.updatedAt
       }]);
+      if (error) {
+        console.error('Failed to insert profile to Supabase:', error);
+      }
     }
 
     INITIAL_PROFILES.push(newGuru);
+    let savedTeachers: Profile[] = [];
+    const savedTeachersRaw = localStorage.getItem('guruku_teachers');
+    if (savedTeachersRaw) {
+      try { savedTeachers = JSON.parse(savedTeachersRaw); } catch (e) {}
+    }
+    if (!savedTeachers.some((t) => t.id === newGuru.id)) {
+      savedTeachers.unshift(newGuru);
+      localStorage.setItem('guruku_teachers', JSON.stringify(savedTeachers));
+    }
+
     showSuccessToast(`Akun Guru ${fullName} berhasil dibuat.`);
     return { success: true, password: autoPassword, profile: newGuru };
   };
@@ -233,6 +255,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const supabase = getSupabaseClient();
     if (supabase) {
       await supabase.from('profiles').update({
+        password: newPass,
         updated_at: new Date().toISOString()
       }).eq('id', guruId);
     }
