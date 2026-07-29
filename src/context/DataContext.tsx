@@ -24,7 +24,8 @@ import {
   INITIAL_MODULES,
   INITIAL_SYSTEM_SETTINGS,
   INITIAL_ACTIVITY_LOGS,
-  getSupabaseClient
+  getSupabaseClient,
+  getNeonSql
 } from '../services/supabase';
 import { showSuccessToast, showErrorToast } from '../components/common/SweetAlert';
 import { useAuth } from './AuthContext';
@@ -334,9 +335,37 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     showSuccessToast('Tahun Pelajaran berhasil dihapus.');
   };
 
-  // Fetch teachers from Supabase on mount if available
+  // Fetch teachers from Neon DB or Supabase on mount if available
   useEffect(() => {
-    const fetchTeachersFromSupabase = async () => {
+    const fetchTeachersFromDB = async () => {
+      const sql = getNeonSql();
+      if (sql) {
+        try {
+          const data = await sql`SELECT * FROM public.profiles WHERE role = 'guru'`;
+          if (data && data.length > 0) {
+            const fetched: Profile[] = data.map((d: any) => ({
+              id: d.id,
+              email: d.email,
+              username: d.username,
+              fullName: d.full_name,
+              role: d.role,
+              nipNuptk: d.nip_nuptk,
+              phone: d.phone,
+              password: d.password,
+              avatarUrl: d.avatar_url,
+              avatarDriveId: d.avatar_drive_id,
+              createdAt: d.created_at ? new Date(d.created_at).toISOString() : new Date().toISOString(),
+              updatedAt: d.updated_at ? new Date(d.updated_at).toISOString() : new Date().toISOString()
+            }));
+            setTeachers(fetched);
+            localStorage.setItem('guruku_teachers', JSON.stringify(fetched));
+            return;
+          }
+        } catch (e) {
+          console.warn('Gagal mengambil data guru dari Neon DB:', e);
+        }
+      }
+
       const supabase = getSupabaseClient();
       if (supabase) {
         const { data, error } = await supabase
@@ -363,7 +392,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     };
-    fetchTeachersFromSupabase();
+    fetchTeachersFromDB();
   }, []);
 
   // Teacher Actions
@@ -378,6 +407,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateTeacher = (id: string, updated: Partial<Profile>) => {
     setTeachers((prev) => prev.map((t) => (t.id === id ? { ...t, ...updated } : t)));
+    
+    const sql = getNeonSql();
+    if (sql) {
+      sql`
+        UPDATE public.profiles
+        SET full_name = ${updated.fullName},
+            username = ${updated.username},
+            email = ${updated.email},
+            nip_nuptk = ${updated.nipNuptk},
+            phone = ${updated.phone},
+            updated_at = NOW()
+        WHERE id = ${id}
+      `.catch((err: any) => console.warn('Neon DB teacher update error:', err));
+    }
+
     const supabase = getSupabaseClient();
     if (supabase) {
       supabase.from('profiles').update({
@@ -396,6 +440,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteTeacher = (id: string) => {
     setTeachers((prev) => prev.filter((t) => t.id !== id));
+    
+    const sql = getNeonSql();
+    if (sql) {
+      sql`DELETE FROM public.profiles WHERE id = ${id}`.catch((err: any) => console.warn('Neon DB teacher delete error:', err));
+    }
+
     const supabase = getSupabaseClient();
     if (supabase) {
       supabase.from('profiles').delete().eq('id', id).then(() => {});

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Profile, UserRole } from '../types';
-import { INITIAL_PROFILES, getSupabaseClient } from '../services/supabase';
+import { INITIAL_PROFILES, getSupabaseClient, getNeonSql } from '../services/supabase';
 import { showSuccessToast, showErrorToast } from '../components/common/SweetAlert';
 
 export interface RegisterGuruResult {
@@ -53,9 +53,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const cleanInputNoAt = cleanInput.replace(/^@/, '');
       const cleanPass = _password.trim();
 
+      // 1. Try Neon Serverless Postgres DB
+      const sql = getNeonSql();
+      if (sql) {
+        try {
+          const rows = await sql`
+            SELECT * FROM public.profiles 
+            WHERE LOWER(email) = ${cleanInput} OR LOWER(username) = ${cleanInput} OR LOWER(username) = ${cleanInputNoAt}
+            LIMIT 1
+          `;
+          if (rows && rows.length > 0) {
+            const matched = rows[0];
+            if (matched.password && matched.password !== _password && matched.password !== cleanPass) {
+              showErrorToast('Kata sandi (password) yang Anda masukkan tidak sesuai.');
+              setLoading(false);
+              return false;
+            }
+
+            const profile: Profile = {
+              id: matched.id,
+              email: matched.email,
+              username: matched.username || cleanInputNoAt,
+              fullName: matched.full_name,
+              role: matched.role,
+              nipNuptk: matched.nip_nuptk,
+              phone: matched.phone,
+              password: matched.password || _password,
+              avatarUrl: matched.avatar_url,
+              avatarDriveId: matched.avatar_drive_id,
+              createdAt: matched.created_at ? new Date(matched.created_at).toISOString() : new Date().toISOString(),
+              updatedAt: matched.updated_at ? new Date(matched.updated_at).toISOString() : new Date().toISOString()
+            };
+            setUser(profile);
+            if (rememberMe) {
+              localStorage.setItem('guruku_session_user', JSON.stringify(profile));
+            }
+            showSuccessToast(`Selamat datang kembali, ${profile.fullName}! (Neon DB)`);
+            setLoading(false);
+            return true;
+          }
+        } catch (neonErr) {
+          console.warn('Neon DB login error, falling back to local session:', neonErr);
+        }
+      }
+
+      // 2. Legacy Supabase check
       const supabase = getSupabaseClient();
       if (supabase) {
-        // Query Supabase profiles table by email or username
         const { data, error } = await supabase
           .from('profiles')
           .select('*');
@@ -102,7 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Fallback local check by username or email
+      // 3. Local state fallback
       let savedTeachers: Profile[] = [];
       const savedTeachersRaw = localStorage.getItem('guruku_teachers');
       if (savedTeachersRaw) {
@@ -186,6 +230,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedAt: new Date().toISOString()
     };
 
+    const sql = getNeonSql();
+    if (sql) {
+      try {
+        await sql`
+          INSERT INTO public.profiles (id, email, username, password, full_name, role, nip_nuptk, phone, avatar_url, created_at, updated_at)
+          VALUES (${newGuru.id}, ${newGuru.email}, ${newGuru.username}, ${newGuru.password}, ${newGuru.fullName}, 'guru', ${newGuru.nipNuptk}, ${newGuru.phone}, ${newGuru.avatarUrl}, NOW(), NOW())
+          ON CONFLICT (id) DO UPDATE SET
+            email = EXCLUDED.email,
+            username = EXCLUDED.username,
+            password = EXCLUDED.password,
+            full_name = EXCLUDED.full_name,
+            nip_nuptk = EXCLUDED.nip_nuptk,
+            phone = EXCLUDED.phone,
+            updated_at = NOW()
+        `;
+      } catch (err) {
+        console.warn('Gagal menyimpan profil ke Neon DB:', err);
+      }
+    }
+
     const supabase = getSupabaseClient();
     if (supabase) {
       const { error } = await supabase.from('profiles').upsert([{
@@ -233,6 +297,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       INITIAL_PROFILES[idx] = updatedProfile;
     }
 
+    const sql = getNeonSql();
+    if (sql) {
+      try {
+        await sql`
+          UPDATE public.profiles
+          SET email = ${updatedProfile.email},
+              full_name = ${updatedProfile.fullName},
+              nip_nuptk = ${updatedProfile.nipNuptk},
+              phone = ${updatedProfile.phone},
+              avatar_url = ${updatedProfile.avatarUrl},
+              updated_at = NOW()
+          WHERE id = ${user.id}
+        `;
+      } catch (err) {
+        console.warn('Gagal memperbarui profil di Neon DB:', err);
+      }
+    }
+
     const supabase = getSupabaseClient();
     if (supabase) {
       await supabase.from('profiles').update({
@@ -265,6 +347,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('guruku_teachers', JSON.stringify(updated));
       } catch (e) {
         console.error(e);
+      }
+    }
+
+    const sql = getNeonSql();
+    if (sql) {
+      try {
+        await sql`
+          UPDATE public.profiles
+          SET password = ${newPass},
+              updated_at = NOW()
+          WHERE id = ${guruId}
+        `;
+      } catch (err) {
+        console.warn('Gagal reset password di Neon DB:', err);
       }
     }
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useData } from '../../context/DataContext';
-import { resetSupabaseClient, generateSupabaseSQLScript, getSupabaseClient, INITIAL_PROFILES } from '../../services/supabase';
+import { resetSupabaseClient, resetNeonClient, generateSupabaseSQLScript, generateNeonSQLScript, getSupabaseClient, getNeonSql, INITIAL_PROFILES } from '../../services/supabase';
 import { showSuccessToast } from '../../components/common/SweetAlert';
 import { Profile } from '../../types';
 import {
@@ -32,19 +32,53 @@ export const PanduanAdminPage: React.FC = () => {
   const [copiedSql, setCopiedSql] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'supabase' | 'gdrive' | 'checklist'>('supabase');
 
-  // Supabase Credentials State
+  // Database Credentials State
+  const [neonDbUrl, setNeonDbUrl] = useState<string>(systemSettings.neonDbUrl || localStorage.getItem('guruku_neon_db_url') || '');
   const [supabaseUrl, setSupabaseUrl] = useState<string>(systemSettings.supabaseUrl || '');
   const [supabaseAnonKey, setSupabaseAnonKey] = useState<string>(systemSettings.supabaseAnonKey || '');
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
-  const handleSaveSupabaseConfig = async (e: React.FormEvent) => {
+  const handleSaveDatabaseConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSyncing(true);
-    resetSupabaseClient(supabaseUrl, supabaseAnonKey);
+    if (neonDbUrl) {
+      resetNeonClient(neonDbUrl);
+    }
+    if (supabaseUrl && supabaseAnonKey) {
+      resetSupabaseClient(supabaseUrl, supabaseAnonKey);
+    }
     updateSystemSettings({
+      neonDbUrl,
       supabaseUrl,
       supabaseAnonKey
     });
+
+    const neonSql = getNeonSql();
+    if (neonSql) {
+      try {
+        const rows = await neonSql`SELECT id FROM public.profiles LIMIT 1`;
+        if (rows) {
+          const savedTeachersRaw = localStorage.getItem('guruku_teachers');
+          let savedTeachers: Profile[] = [];
+          if (savedTeachersRaw) {
+            try { savedTeachers = JSON.parse(savedTeachersRaw); } catch (err) {}
+          }
+          const allProfs = [...INITIAL_PROFILES, ...savedTeachers];
+          for (const p of allProfs) {
+            await neonSql`
+              INSERT INTO public.profiles (id, email, username, password, full_name, role, nip_nuptk, phone, avatar_url, created_at, updated_at)
+              VALUES (${p.id}, ${p.email}, ${p.username}, ${p.password || 'Gk-123456'}, ${p.fullName}, ${p.role}, ${p.nipNuptk}, ${p.phone}, ${p.avatarUrl}, NOW(), NOW())
+              ON CONFLICT (id) DO NOTHING
+            `;
+          }
+          showSuccessToast('Kredensial Disimpan! KONEKSI NEON DATABASE (SERVERLESS POSTGRES) BERHASIL & Data disinkronkan.');
+          setIsSyncing(false);
+          return;
+        }
+      } catch (err) {
+        console.warn(err);
+      }
+    }
 
     const client = getSupabaseClient();
     if (client) {
@@ -72,7 +106,7 @@ export const PanduanAdminPage: React.FC = () => {
               updated_at: p.updatedAt
             });
           }
-          showSuccessToast('Kredensial disimpan! KONEKSI SUPABASE TERHUBUNG REALTIME & Data akun telah disinkronkan.');
+          showSuccessToast('Kredensial disimpan! KONEKSI DATABASE TERHUBUNG & Data akun telah disinkronkan.');
           setIsSyncing(false);
           return;
         }
@@ -80,7 +114,7 @@ export const PanduanAdminPage: React.FC = () => {
         console.warn(err);
       }
     }
-    showSuccessToast('Konfigurasi Supabase Runtime berhasil diperbarui.');
+    showSuccessToast('Konfigurasi Database Runtime berhasil diperbarui.');
     setIsSyncing(false);
   };
 
@@ -274,35 +308,51 @@ export const PanduanAdminPage: React.FC = () => {
             <div className="p-6 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700">
                 <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  <Database className="w-4 h-4 text-[#696cff]" /> Hubungkan Kredensial Supabase Secara Direct
+                  <Database className="w-4 h-4 text-emerald-500" /> Hubungkan Kredensial Database (Neon / Supabase)
                 </h3>
                 <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg">
-                  Akses Multi-Browser & Multi-Perangkat
+                  Akses Multi-Browser & Multi-Perangkat 24/7
                 </span>
               </div>
 
-              <form onSubmit={handleSaveSupabaseConfig} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">VITE_SUPABASE_URL</label>
-                    <input
-                      type="text"
-                      value={supabaseUrl}
-                      onChange={(e) => setSupabaseUrl(e.target.value)}
-                      placeholder="https://xyzcompany.supabase.co"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-[#696cff]"
-                    />
-                  </div>
+              <form onSubmit={handleSaveDatabaseConfig} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Neon Database URL (DATABASE_URL / VITE_NEON_DATABASE_URL)
+                  </label>
+                  <input
+                    type="text"
+                    value={neonDbUrl}
+                    onChange={(e) => setNeonDbUrl(e.target.value)}
+                    placeholder="postgresql://user:password@ep-sample-123456.us-east-2.aws.neon.tech/neondb?sslmode=require"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">VITE_SUPABASE_ANON_KEY</label>
-                    <input
-                      type="password"
-                      value={supabaseAnonKey}
-                      onChange={(e) => setSupabaseAnonKey(e.target.value)}
-                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-[#696cff]"
-                    />
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-[11px] font-bold text-slate-500 mb-2">Supabase Credentials (Opsional):</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">VITE_SUPABASE_URL</label>
+                      <input
+                        type="text"
+                        value={supabaseUrl}
+                        onChange={(e) => setSupabaseUrl(e.target.value)}
+                        placeholder="https://xyzcompany.supabase.co"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-[#696cff]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">VITE_SUPABASE_ANON_KEY</label>
+                      <input
+                        type="password"
+                        value={supabaseAnonKey}
+                        onChange={(e) => setSupabaseAnonKey(e.target.value)}
+                        placeholder="eyJhbGciOiJIUzI1Ni..."
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-[#696cff]"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -310,10 +360,10 @@ export const PanduanAdminPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={isSyncing}
-                    className="px-5 py-2.5 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     <Save className="w-4 h-4" />
-                    <span>{isSyncing ? 'Menyinkronkan...' : 'Simpan Kredensial & Hubungkan Supabase'}</span>
+                    <span>{isSyncing ? 'Menyinkronkan...' : 'Simpan Kredensial & Hubungkan Database'}</span>
                   </button>
                 </div>
               </form>

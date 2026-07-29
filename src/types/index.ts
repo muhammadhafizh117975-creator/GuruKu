@@ -155,6 +155,7 @@ export interface LetterheadSettings {
 export interface SystemSettings {
   paperMargin: PaperMargin;
   letterhead: LetterheadSettings;
+  neonDbUrl?: string;
   supabaseUrl?: string;
   supabaseAnonKey?: string;
   googleDriveConnected?: boolean;
