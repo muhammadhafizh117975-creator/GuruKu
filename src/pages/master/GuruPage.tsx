@@ -45,6 +45,10 @@ export const GuruPage: React.FC = () => {
   const [editNipNuptk, setEditNipNuptk] = useState<string>('');
   const [editPhone, setEditPhone] = useState<string>('');
 
+  // View Credentials Modal State
+  const [viewingCredentialsTeacher, setViewingCredentialsTeacher] = useState<Profile | null>(null);
+  const [showPasswordInModal, setShowPasswordInModal] = useState<boolean>(false);
+
   // Created Guru Info Modal State (shows auto-generated password)
   const [createdGuruInfo, setCreatedGuruInfo] = useState<{
     fullName: string;
@@ -277,6 +281,16 @@ Password: ${createdGuruInfo.password}`;
                 </span>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
+                    onClick={() => {
+                      setViewingCredentialsTeacher(teacher);
+                      setShowPasswordInModal(false);
+                    }}
+                    title="Lihat Kredensial Login"
+                    className="p-2 rounded-xl bg-[#696cff]/10 hover:bg-[#696cff] text-[#696cff] hover:text-white transition-colors cursor-pointer"
+                  >
+                    <KeyRound className="w-3.5 h-3.5" />
+                  </button>
+                  <button
                     onClick={() => handleOpenEditModal(teacher)}
                     title="Edit Data Guru"
                     className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-[#696cff]/10 text-slate-600 dark:text-slate-300 hover:text-[#696cff] transition-colors cursor-pointer"
@@ -287,7 +301,7 @@ Password: ${createdGuruInfo.password}`;
                     onClick={() => handleOpenResetModal(teacher)}
                     className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-[#696cff]/10 text-slate-700 dark:text-slate-200 hover:text-[#696cff] text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
                   >
-                    <KeyRound className="w-3.5 h-3.5 text-[#696cff]" /> Reset Pass
+                    Reset Pass
                   </button>
                   <button
                     onClick={() => handleDeleteGuru(teacher)}
@@ -629,6 +643,85 @@ Password: ${createdGuruInfo.password}`;
               </button>
             </div>
           </form>
+        )}
+      </Modal>
+
+      {/* Modal View Teacher Credentials */}
+      <Modal
+        isOpen={!!viewingCredentialsTeacher}
+        onClose={() => setViewingCredentialsTeacher(null)}
+        title="Kredensial Login Akun Guru"
+        subtitle={viewingCredentialsTeacher ? `Informasi login untuk ${viewingCredentialsTeacher.fullName}` : ''}
+      >
+        {viewingCredentialsTeacher && (
+          <div className="space-y-4">
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nama Guru</span>
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{viewingCredentialsTeacher.fullName}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Username Login</span>
+                  <p className="text-xs font-mono font-bold text-[#696cff]">@{viewingCredentialsTeacher.username || 'guru_user'}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Email Sekolah</span>
+                  <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{viewingCredentialsTeacher.email}</p>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Password Akun</span>
+                <div className="mt-1 flex items-center justify-between bg-white dark:bg-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600">
+                  <span className="text-base font-mono font-extrabold text-slate-900 dark:text-slate-100 tracking-wider">
+                    {showPasswordInModal ? (viewingCredentialsTeacher.password || 'Gk-123456') : '••••••••'}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordInModal(!showPasswordInModal)}
+                      className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-[#696cff] text-xs font-semibold"
+                    >
+                      {showPasswordInModal ? 'Sembunyikan' : 'Tampilkan'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(viewingCredentialsTeacher.password || 'Gk-123456');
+                        showSuccessToast('Password berhasil disalin!');
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-[#696cff]/10 text-[#696cff] hover:bg-[#696cff] hover:text-white text-xs font-bold"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  const teacherToReset = viewingCredentialsTeacher;
+                  setViewingCredentialsTeacher(null);
+                  handleOpenResetModal(teacherToReset);
+                }}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-[#696cff]/10 text-[#696cff] font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <KeyRound className="w-4 h-4" /> Reset Password Ini
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewingCredentialsTeacher(null)}
+                className="px-5 py-2.5 rounded-xl bg-[#696cff] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 hover:bg-[#5f61e6] cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
         )}
       </Modal>
     </div>

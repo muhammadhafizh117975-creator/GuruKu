@@ -154,8 +154,8 @@ CREATE TABLE public.system_settings (
 -- 12. INDEXES UNTUK OPTIMASI PERFORMA QUERY
 CREATE INDEX IF NOT EXISTS idx_students_class_id ON public.students(class_id);
 CREATE INDEX IF NOT EXISTS idx_grades_student_id ON public.grades(student_id);
-CREATE INDEX IF NOT EXISTS idx_grades_subject_id ON public.subjects(id);
-CREATE INDEX IF NOT EXISTS idx_grades_class_id ON public.classes(id);
+CREATE INDEX IF NOT EXISTS idx_grades_subject_id ON public.grades(subject_id);
+CREATE INDEX IF NOT EXISTS idx_grades_class_id ON public.grades(class_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_date ON public.attendance(date);
 CREATE INDEX IF NOT EXISTS idx_attendance_student_id ON public.attendance(student_id);
 CREATE INDEX IF NOT EXISTS idx_journals_date ON public.teaching_journals(date);

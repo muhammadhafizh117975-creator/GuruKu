@@ -405,6 +405,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (prev.some((t) => t.id === teacher.id)) return prev;
       return [teacher, ...prev];
     });
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from('profiles').insert([{
+        id: teacher.id,
+        email: teacher.email,
+        username: teacher.username,
+        password: teacher.password,
+        full_name: teacher.fullName,
+        role: teacher.role || 'guru',
+        nip_nuptk: teacher.nipNuptk,
+        phone: teacher.phone,
+        avatar_url: teacher.avatarUrl,
+        created_at: teacher.createdAt || new Date().toISOString(),
+        updated_at: teacher.updatedAt || new Date().toISOString()
+      }]).then(({ error }: any) => {
+        if (error) console.warn('Supabase add teacher error:', error);
+      });
+    }
+
     notifyBroadcastSync();
     logActivity('TAMBAH_GURU', `Menambahkan data akun guru ${teacher.fullName}`);
   };
