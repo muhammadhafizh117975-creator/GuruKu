@@ -53,96 +53,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const cleanInputNoAt = cleanInput.replace(/^@/, '');
       const cleanPass = _password.trim();
 
-      // 1. Try Neon Serverless Postgres DB
-      const sql = getNeonSql();
-      if (sql) {
-        try {
-          const rows = await sql`
-            SELECT * FROM public.profiles 
-            WHERE LOWER(email) = ${cleanInput} OR LOWER(username) = ${cleanInput} OR LOWER(username) = ${cleanInputNoAt}
-            LIMIT 1
-          `;
-          if (rows && rows.length > 0) {
-            const matched = rows[0];
-            if (matched.password && matched.password !== _password && matched.password !== cleanPass) {
-              showErrorToast('Kata sandi (password) yang Anda masukkan tidak sesuai.');
-              setLoading(false);
-              return false;
-            }
-
-            const profile: Profile = {
-              id: matched.id,
-              email: matched.email,
-              username: matched.username || cleanInputNoAt,
-              fullName: matched.full_name,
-              role: matched.role,
-              nipNuptk: matched.nip_nuptk,
-              phone: matched.phone,
-              password: matched.password || _password,
-              avatarUrl: matched.avatar_url,
-              avatarDriveId: matched.avatar_drive_id,
-              createdAt: matched.created_at ? new Date(matched.created_at).toISOString() : new Date().toISOString(),
-              updatedAt: matched.updated_at ? new Date(matched.updated_at).toISOString() : new Date().toISOString()
-            };
-            setUser(profile);
-            if (rememberMe) {
-              localStorage.setItem('guruku_session_user', JSON.stringify(profile));
-            }
-            showSuccessToast(`Selamat datang kembali, ${profile.fullName}! (Neon DB)`);
-            setLoading(false);
-            return true;
-          }
-        } catch (neonErr) {
-          console.warn('Neon DB login error, falling back to local session:', neonErr);
-        }
-      }
-
-      // 2. Legacy Supabase check
+      // 1. Supabase authentication check
       const supabase = getSupabaseClient();
       if (supabase) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*');
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('*');
 
-        if (data && !error && data.length > 0) {
-          const matched = data.find((d: any) => {
-            const emailMatch = d.email && d.email.toLowerCase() === cleanInput;
-            const unameMatch = d.username && (
-              d.username.toLowerCase() === cleanInput ||
-              d.username.toLowerCase() === cleanInputNoAt
-            );
-            return emailMatch || unameMatch;
-          });
+          if (data && !error && data.length > 0) {
+            const matched = data.find((d: any) => {
+              const emailMatch = d.email && d.email.toLowerCase() === cleanInput;
+              const unameMatch = d.username && (
+                d.username.toLowerCase() === cleanInput ||
+                d.username.toLowerCase() === cleanInputNoAt
+              );
+              return emailMatch || unameMatch;
+            });
 
-          if (matched) {
-            if (matched.password && matched.password !== _password && matched.password !== cleanPass) {
-              showErrorToast('Kata sandi (password) yang Anda masukkan tidak sesuai.');
+            if (matched) {
+              if (matched.password && matched.password !== _password && matched.password !== cleanPass) {
+                showErrorToast('Kata sandi (password) yang Anda masukkan tidak sesuai.');
+                setLoading(false);
+                return false;
+              }
+
+              const profile: Profile = {
+                id: matched.id,
+                email: matched.email,
+                username: matched.username || cleanInputNoAt,
+                fullName: matched.full_name,
+                role: matched.role,
+                nipNuptk: matched.nip_nuptk,
+                phone: matched.phone,
+                password: matched.password || _password,
+                avatarUrl: matched.avatar_url,
+                avatarDriveId: matched.avatar_drive_id,
+                createdAt: matched.created_at,
+                updatedAt: matched.updated_at
+              };
+              setUser(profile);
+              if (rememberMe) {
+                localStorage.setItem('guruku_session_user', JSON.stringify(profile));
+              }
+              showSuccessToast(`Selamat datang kembali, ${profile.fullName}! (Supabase DB)`);
               setLoading(false);
-              return false;
+              return true;
             }
-
-            const profile: Profile = {
-              id: matched.id,
-              email: matched.email,
-              username: matched.username || cleanInputNoAt,
-              fullName: matched.full_name,
-              role: matched.role,
-              nipNuptk: matched.nip_nuptk,
-              phone: matched.phone,
-              password: matched.password || _password,
-              avatarUrl: matched.avatar_url,
-              avatarDriveId: matched.avatar_drive_id,
-              createdAt: matched.created_at,
-              updatedAt: matched.updated_at
-            };
-            setUser(profile);
-            if (rememberMe) {
-              localStorage.setItem('guruku_session_user', JSON.stringify(profile));
-            }
-            showSuccessToast(`Selamat datang kembali, ${profile.fullName}!`);
-            setLoading(false);
-            return true;
           }
+        } catch (supabaseErr) {
+          console.warn('Supabase DB login error, falling back to local session:', supabaseErr);
         }
       }
 

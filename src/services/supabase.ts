@@ -1,43 +1,103 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { getNeonSql, resetNeonClient, generateNeonSQLScript } from './neon';
 import {
-  getNeonSql,
-  resetNeonClient,
-  generateNeonSQLScript,
-  DEFAULT_KOP_SURAT_SVG,
-  DEFAULT_SYSTEM_SETTINGS,
-  INITIAL_ACADEMIC_YEARS,
-  INITIAL_PROFILES,
-  INITIAL_SUBJECTS,
-  INITIAL_CLASSES,
-  INITIAL_STUDENTS,
-  INITIAL_GRADES,
-  INITIAL_ATTENDANCE,
-  INITIAL_JOURNALS,
-  INITIAL_MODULES,
-  INITIAL_ACTIVITY_LOGS,
-  INITIAL_SYSTEM_SETTINGS
-} from './neon';
+  AcademicYearItem,
+  Profile,
+  Subject,
+  ClassRoom,
+  Student,
+  Grade,
+  Attendance,
+  TeachingJournal,
+  TeachingModule,
+  SystemSettings,
+  ActivityLog
+} from '../types';
 
-export {
-  getNeonSql,
-  resetNeonClient,
-  generateNeonSQLScript,
-  DEFAULT_KOP_SURAT_SVG,
-  DEFAULT_SYSTEM_SETTINGS,
-  INITIAL_ACADEMIC_YEARS,
-  INITIAL_PROFILES,
-  INITIAL_SUBJECTS,
-  INITIAL_CLASSES,
-  INITIAL_STUDENTS,
-  INITIAL_GRADES,
-  INITIAL_ATTENDANCE,
-  INITIAL_JOURNALS,
-  INITIAL_MODULES,
-  INITIAL_ACTIVITY_LOGS,
-  INITIAL_SYSTEM_SETTINGS
+export { getNeonSql, resetNeonClient, generateNeonSQLScript };
+
+// Default Kop Surat Base64 SVG fallback
+export const DEFAULT_KOP_SURAT_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="120" viewBox="0 0 800 120">
+  <rect width="800" height="120" fill="%23ffffff"/>
+  <path d="M0,0 L800,0 L800,10 L0,10 Z" fill="%23696cff"/>
+  <circle cx="65" cy="65" r="35" fill="%23696cff" opacity="0.1"/>
+  <path d="M50 75 L65 45 L80 75 Z" fill="%23696cff"/>
+  <text x="120" y="45" font-family="Arial, sans-serif" font-weight="bold" font-size="20" fill="%232b2c40">PEMERINTAH KOTA GURUKU - DINAS PENDIDIKAN</text>
+  <text x="120" y="68" font-family="Arial, sans-serif" font-weight="bold" font-size="16" fill="%23696cff">SMP / SMA UNGGULAN GURUKU INDONESIA</text>
+  <text x="120" y="88" font-family="Arial, sans-serif" font-size="11" fill="%23697a8d">Jl. Pendidikan No. 100, Jakarta Pusat 10110 | Telp: (021) 555-0192 | Email: info@guruku.sch.id</text>
+  <line x1="20" y1="106" x2="780" y2="106" stroke="%232b2c40" stroke-width="3"/>
+  <line x1="20" y1="110" x2="780" y2="110" stroke="%23696cff" stroke-width="1"/>
+</svg>`;
+
+export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
+  paperMargin: {
+    unit: 'mm',
+    top: 20,
+    bottom: 20,
+    left: 20,
+    right: 20
+  },
+  letterhead: {
+    imageUrl: DEFAULT_KOP_SURAT_SVG,
+    heightMm: 35,
+    showInPdf: true,
+    institutionName: 'SMP / SMA UNGGULAN GURUKU INDONESIA',
+    address: 'Jl. Pendidikan No. 100, Jakarta Pusat 10110'
+  },
+  googleDriveConnected: true,
+  googleDriveFolderName: 'GuruKu_Master_Directory',
+  updatedAt: new Date().toISOString()
 };
 
-// Helper to create Supabase client dynamically if needed
+export const INITIAL_ACADEMIC_YEARS: AcademicYearItem[] = [
+  { id: 'ay_2025_2026_1', year: '2025/2026', semester: '1', isActive: true, status: 'Aktif', createdAt: new Date().toISOString() }
+];
+
+export const INITIAL_PROFILES: Profile[] = [
+  {
+    id: 'user_admin_01',
+    email: 'admin@guruku.sch.id',
+    username: 'admin',
+    fullName: 'Administrator Sekolah',
+    role: 'admin',
+    nipNuptk: '19800101 200501 1 001',
+    phone: '081234567890',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
+export const INITIAL_SUBJECTS: Subject[] = [];
+export const INITIAL_CLASSES: ClassRoom[] = [];
+export const INITIAL_STUDENTS: Student[] = [];
+export const INITIAL_GRADES: Grade[] = [];
+export const INITIAL_ATTENDANCE: Attendance[] = [];
+export const INITIAL_JOURNALS: TeachingJournal[] = [];
+export const INITIAL_MODULES: TeachingModule[] = [];
+export const INITIAL_ACTIVITY_LOGS: ActivityLog[] = [];
+
+export const INITIAL_SYSTEM_SETTINGS: SystemSettings = {
+  paperMargin: {
+    unit: 'mm',
+    top: 20,
+    bottom: 20,
+    left: 25,
+    right: 20
+  },
+  letterhead: {
+    imageUrl: 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=800&auto=format&fit=crop&q=80',
+    heightMm: 35,
+    showInPdf: true,
+    institutionName: 'DINAS PENDIDIKAN DAN KEBUDAYAAN SMP NEGERI 1 GURUKU ACADEMIA',
+    address: 'Jl. Pendidikan No. 45, Kompleks Akademik, Jakarta Selatan | Telp: (021) 7890123'
+  },
+  googleDriveConnected: true,
+  googleDriveFolderName: 'GuruKu_Storage',
+  updatedAt: new Date().toISOString()
+};
+
+// Singleton Supabase Client Instance
 let supabaseClientInstance: SupabaseClient | null = null;
 
 export function getSupabaseClient(): SupabaseClient | null {
@@ -52,7 +112,7 @@ export function getSupabaseClient(): SupabaseClient | null {
       supabaseClientInstance = createClient(url, anonKey);
       return supabaseClientInstance;
     } catch (e) {
-      console.warn('Failed to initialize Supabase client:', e);
+      console.warn('Gagal menginisialisasi client Supabase:', e);
     }
   }
   return null;
@@ -70,6 +130,197 @@ export function resetSupabaseClient(url: string, key: string) {
   }
 }
 
+// Master SQL Script untuk Reset Total & Inisialisasi Ulang Supabase Database
 export function generateSupabaseSQLScript(): string {
-  return generateNeonSQLScript();
+  return `-- ============================================================
+-- SCRIPT RESET TOTAL & SETUP MASTER DATABASE SUPABASE (GURUKU APP)
+-- Silakan jalankan script ini di SQL Editor pada Supabase Dashboard Anda.
+-- Script ini akan MENGHAPUS SEMUA DATA/TABEL LAMA dan MEMBUAT ULANG
+-- struktur database bersih beserta RLS, Index, dan Realtime.
+-- ============================================================
+
+-- 1. DROP ALL OLD TABLES (RESET TOTAL DATABASE)
+DROP TABLE IF EXISTS public.teaching_modules CASCADE;
+DROP TABLE IF EXISTS public.teaching_journals CASCADE;
+DROP TABLE IF EXISTS public.attendance CASCADE;
+DROP TABLE IF EXISTS public.grades CASCADE;
+DROP TABLE IF EXISTS public.students CASCADE;
+DROP TABLE IF EXISTS public.classes CASCADE;
+DROP TABLE IF EXISTS public.subjects CASCADE;
+DROP TABLE IF EXISTS public.system_settings CASCADE;
+DROP TABLE IF EXISTS public.profiles CASCADE;
+
+-- 2. EXTENSIONS
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- 3. TABEL PROFILES (AKUN GURU & ADMIN)
+CREATE TABLE public.profiles (
+  id TEXT PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  username TEXT UNIQUE,
+  password TEXT,
+  full_name TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'guru')),
+  nip_nuptk TEXT,
+  phone TEXT,
+  avatar_url TEXT,
+  avatar_drive_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Seed Default Admin Profile
+INSERT INTO public.profiles (id, email, username, password, full_name, role, nip_nuptk, phone)
+VALUES ('user_admin_01', 'admin@guruku.sch.id', 'admin', 'admin123', 'Administrator Sekolah', 'admin', '19800101 200501 1 001', '081234567890')
+ON CONFLICT (id) DO NOTHING;
+
+-- 4. TABEL SUBJECTS (MATA PELAJARAN)
+CREATE TABLE public.subjects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  teacher_ids TEXT[] DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. TABEL CLASSES (KELAS & TINGKAT)
+CREATE TABLE public.classes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  grade_level TEXT NOT NULL,
+  academic_year TEXT NOT NULL,
+  homeroom_teacher_id TEXT REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 6. TABEL STUDENTS (DATA SISWA)
+CREATE TABLE public.students (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nis TEXT UNIQUE NOT NULL,
+  full_name TEXT NOT NULL,
+  gender CHAR(1) CHECK (gender IN ('L', 'P')),
+  birth_place TEXT,
+  birth_date DATE,
+  address TEXT,
+  parent_phone TEXT,
+  class_id UUID REFERENCES public.classes(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 7. TABEL GRADES (NILAI SISWA)
+CREATE TABLE public.grades (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
+  subject_id UUID REFERENCES public.subjects(id) ON DELETE CASCADE,
+  class_id UUID REFERENCES public.classes(id) ON DELETE CASCADE,
+  teacher_id TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
+  assignment_score NUMERIC DEFAULT 0,
+  daily_score NUMERIC DEFAULT 0,
+  pts_score NUMERIC DEFAULT 0,
+  pas_score NUMERIC DEFAULT 0,
+  final_score NUMERIC DEFAULT 0,
+  predicate CHAR(1) CHECK (predicate IN ('A', 'B', 'C', 'D')),
+  notes TEXT,
+  academic_year TEXT NOT NULL,
+  semester CHAR(1) CHECK (semester IN ('1', '2')),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 8. TABEL ATTENDANCE (PRESENSI / ABSENSI)
+CREATE TABLE public.attendance (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  date DATE NOT NULL,
+  student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
+  class_id UUID REFERENCES public.classes(id) ON DELETE CASCADE,
+  subject_id UUID REFERENCES public.subjects(id) ON DELETE CASCADE,
+  teacher_id TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
+  status TEXT CHECK (status IN ('Hadir', 'Izin', 'Sakit', 'Alfa')),
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 9. TABEL TEACHING_JOURNALS (JURNAL MENGAJAR)
+CREATE TABLE public.teaching_journals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  date DATE NOT NULL,
+  subject_id UUID REFERENCES public.subjects(id) ON DELETE CASCADE,
+  class_id UUID REFERENCES public.classes(id) ON DELETE CASCADE,
+  teacher_id TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
+  time_slot TEXT NOT NULL,
+  topic TEXT NOT NULL,
+  method TEXT NOT NULL,
+  attendee_count INT DEFAULT 0,
+  notes TEXT,
+  attachment_name TEXT,
+  attachment_drive_id TEXT,
+  attachment_web_view_link TEXT,
+  attachment_web_content_link TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 10. TABEL TEACHING_MODULES (ARSIP MODUL AJAR / RPP)
+CREATE TABLE public.teaching_modules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  subject_id UUID REFERENCES public.subjects(id) ON DELETE CASCADE,
+  class_level TEXT NOT NULL,
+  semester CHAR(1) CHECK (semester IN ('1', '2')),
+  academic_year TEXT NOT NULL,
+  description TEXT,
+  file_type TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  file_size TEXT,
+  file_drive_id TEXT NOT NULL,
+  web_view_link TEXT NOT NULL,
+  web_content_link TEXT NOT NULL,
+  teacher_id TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 11. TABEL SYSTEM_SETTINGS (PENGATURAN KOP SURAT & MARGIN)
+CREATE TABLE public.system_settings (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 12. INDEXES UNTUK OPTIMASI QUERY
+CREATE INDEX idx_students_class_id ON public.students(class_id);
+CREATE INDEX idx_grades_student_id ON public.grades(student_id);
+CREATE INDEX idx_grades_subject_id ON public.grades(subject_id);
+CREATE INDEX idx_grades_class_id ON public.grades(class_id);
+CREATE INDEX idx_attendance_date ON public.attendance(date);
+CREATE INDEX idx_attendance_student_id ON public.attendance(student_id);
+CREATE INDEX idx_journals_date ON public.teaching_journals(date);
+CREATE INDEX idx_modules_subject_id ON public.teaching_modules(subject_id);
+
+-- 13. ENABLE ROW LEVEL SECURITY (RLS) & PUBLIC ACCESS POLICIES
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.subjects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.classes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.grades ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.attendance ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.teaching_journals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.teaching_modules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public full access on profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public full access on subjects" ON public.subjects FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public full access on classes" ON public.classes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public full access on students" ON public.students FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public full access on grades" ON public.grades FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public full access on attendance" ON public.attendance FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public full access on teaching_journals" ON public.teaching_journals FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public full access on teaching_modules" ON public.teaching_modules FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public full access on system_settings" ON public.system_settings FOR ALL USING (true) WITH CHECK (true);
+
+-- 14. AKTIFKAN REALTIME PUBLICATION UNTUK SUPABASE REALTIME
+BEGIN;
+  DROP PUBLICATION IF EXISTS supabase_realtime;
+  CREATE PUBLICATION supabase_realtime FOR ALL TABLES;
+COMMIT;
+`;
 }

@@ -625,109 +625,93 @@ export const PengaturanSistemPage: React.FC = () => {
 
       {activeTab === 'supabase_sql' && (
         <div className="space-y-6 animate-fade-in">
-          {/* Neon Database (Serverless Postgres) Configuration Form */}
+          {/* Supabase Database Credentials Configuration Form */}
           <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-2xl">
+                <div className="p-3 bg-[#696cff]/10 text-[#696cff] rounded-2xl">
                   <Database className="w-6 h-6" />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                    Koneksi Database Neon (Serverless Postgres) <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Aktif</span>
+                    Koneksi Database Supabase Realtime <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#696cff]/10 text-[#696cff] dark:bg-[#696cff]/20">Aktif</span>
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Masukkan URL Koneksi Neon PostgreSQL Anda (format: postgresql://user:pass@ep-xyz.us-east-2.aws.neon.tech/neondb?sslmode=require) untuk sinkronisasi Serverless Postgres instan.
+                    Masukkan URL dan Anon Key dari Proyek Supabase Anda untuk mengaktifkan sinkronisasi database 24/7 di seluruh browser & perangkat.
                   </p>
                 </div>
               </div>
             </div>
 
             <form onSubmit={handleSaveDatabaseConfig} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Neon Database URL (DATABASE_URL / VITE_NEON_DATABASE_URL)
-                </label>
-                <input
-                  type="text"
-                  value={neonDbUrl}
-                  onChange={(e) => setNeonDbUrl(e.target.value)}
-                  placeholder="postgresql://user:password@ep-sample-123456.us-east-2.aws.neon.tech/neondb?sslmode=require"
-                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                <p className="text-xs font-semibold text-slate-400 mb-3">Konfigurasi Opsional Supabase (Legacy):</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                      Project URL (SUPABASE_URL)
-                    </label>
-                    <input
-                      type="text"
-                      value={supabaseUrl}
-                      onChange={(e) => setSupabaseUrl(e.target.value)}
-                      placeholder="https://xyzcompany.supabase.co"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-800 dark:text-slate-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                      API Key Anon (SUPABASE_ANON_KEY)
-                    </label>
-                    <input
-                      type="password"
-                      value={supabaseAnonKey}
-                      onChange={(e) => setSupabaseAnonKey(e.target.value)}
-                      placeholder="eyJhbGciOiJIUzI1Ni..."
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-800 dark:text-slate-100"
-                    />
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Project URL (SUPABASE_URL / VITE_SUPABASE_URL)
+                  </label>
+                  <input
+                    type="text"
+                    value={supabaseUrl}
+                    onChange={(e) => setSupabaseUrl(e.target.value)}
+                    placeholder="https://xyzcompany.supabase.co"
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#696cff]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    API Key Anon / Public (SUPABASE_ANON_KEY / VITE_SUPABASE_ANON_KEY)
+                  </label>
+                  <input
+                    type="password"
+                    value={supabaseAnonKey}
+                    onChange={(e) => setSupabaseAnonKey(e.target.value)}
+                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#696cff]"
+                  />
                 </div>
               </div>
 
               <div className="pt-2 flex justify-end">
                 <button
                   type="submit"
-                  className="px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-lg shadow-emerald-600/30 transition-all flex items-center gap-2 cursor-pointer"
+                  className="px-6 py-3.5 rounded-2xl bg-[#696cff] hover:bg-[#5f61e6] text-white font-extrabold text-xs shadow-lg shadow-[#696cff]/30 transition-all flex items-center gap-2 cursor-pointer"
                 >
-                  <CheckCircle2 className="w-4 h-4" /> Terapkan & Hubungkan Neon Database
+                  <CheckCircle2 className="w-4 h-4" /> Terapkan & Hubungkan Supabase Database
                 </button>
               </div>
             </form>
           </div>
 
-          {/* Neon Serverless Postgres SQL Migration Script Box */}
+          {/* Supabase SQL Migration & Total Reset Script Box */}
           <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-emerald-500" /> Script SQL Migration Database (Neon Serverless Postgres)
+                  <FileText className="w-5 h-5 text-[#696cff]" /> Script SQL Reset Total & Migration (Supabase Database)
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Salin script SQL di bawah ini lalu jalankan di <strong>Neon Console SQL Editor</strong> untuk secara otomatis membuat tabel, relasi, index, dan akun Admin bawaan di Neon.
+                  Salin script SQL di bawah ini lalu jalankan di <strong>SQL Editor</strong> pada Supabase Dashboard Anda. Script ini akan melakukan <strong>Reset Total</strong> (menghapus tabel lama), membuat ulang tabel, relasi, index, kebijakan RLS, serta mengaktifkan Realtime.
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={() => {
-                  navigator.clipboard.writeText(generateNeonSQLScript());
+                  navigator.clipboard.writeText(generateSupabaseSQLScript());
                   setIsCopied(true);
-                  showSuccessToast('Script SQL Neon Postgres disalin ke clipboard!');
+                  showSuccessToast('Script SQL Supabase disalin ke clipboard!');
                   setTimeout(() => setIsCopied(false), 3000);
                 }}
-                className="px-4 py-2.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-extrabold text-xs transition-all flex items-center gap-2 shrink-0 cursor-pointer hover:bg-emerald-100"
+                className="px-4 py-2.5 rounded-2xl bg-[#696cff]/10 hover:bg-[#696cff]/20 border border-[#696cff]/20 text-[#696cff] font-extrabold text-xs transition-all flex items-center gap-2 shrink-0 cursor-pointer"
               >
                 {isCopied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
-                {isCopied ? 'Tersalin!' : 'Salin Script SQL Neon'}
+                {isCopied ? 'Tersalin!' : 'Salin Script SQL Supabase'}
               </button>
             </div>
 
             <div className="relative">
-              <pre className="p-4 rounded-2xl bg-slate-950 text-emerald-300 font-mono text-[11px] leading-relaxed overflow-x-auto max-h-72 custom-scrollbar">
-                {generateNeonSQLScript()}
+              <pre className="p-4 rounded-2xl bg-slate-950 text-slate-100 font-mono text-[11px] leading-relaxed overflow-x-auto max-h-72 custom-scrollbar">
+                {generateSupabaseSQLScript()}
               </pre>
             </div>
           </div>

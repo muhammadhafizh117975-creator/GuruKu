@@ -308,51 +308,35 @@ export const PanduanAdminPage: React.FC = () => {
             <div className="p-6 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700">
                 <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  <Database className="w-4 h-4 text-emerald-500" /> Hubungkan Kredensial Database (Neon / Supabase)
+                  <Database className="w-4 h-4 text-[#696cff]" /> Hubungkan Kredensial Database Supabase
                 </h3>
-                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg">
+                <span className="text-[11px] font-bold text-[#696cff] bg-[#696cff]/10 px-2.5 py-1 rounded-lg">
                   Akses Multi-Browser & Multi-Perangkat 24/7
                 </span>
               </div>
 
               <form onSubmit={handleSaveDatabaseConfig} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Neon Database URL (DATABASE_URL / VITE_NEON_DATABASE_URL)
-                  </label>
-                  <input
-                    type="text"
-                    value={neonDbUrl}
-                    onChange={(e) => setNeonDbUrl(e.target.value)}
-                    placeholder="postgresql://user:password@ep-sample-123456.us-east-2.aws.neon.tech/neondb?sslmode=require"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">VITE_SUPABASE_URL</label>
+                    <input
+                      type="text"
+                      value={supabaseUrl}
+                      onChange={(e) => setSupabaseUrl(e.target.value)}
+                      placeholder="https://xyzcompany.supabase.co"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-[#696cff]"
+                    />
+                  </div>
 
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
-                  <p className="text-[11px] font-bold text-slate-500 mb-2">Supabase Credentials (Opsional):</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">VITE_SUPABASE_URL</label>
-                      <input
-                        type="text"
-                        value={supabaseUrl}
-                        onChange={(e) => setSupabaseUrl(e.target.value)}
-                        placeholder="https://xyzcompany.supabase.co"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-[#696cff]"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">VITE_SUPABASE_ANON_KEY</label>
-                      <input
-                        type="password"
-                        value={supabaseAnonKey}
-                        onChange={(e) => setSupabaseAnonKey(e.target.value)}
-                        placeholder="eyJhbGciOiJIUzI1Ni..."
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-[#696cff]"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">VITE_SUPABASE_ANON_KEY</label>
+                    <input
+                      type="password"
+                      value={supabaseAnonKey}
+                      onChange={(e) => setSupabaseAnonKey(e.target.value)}
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-[#696cff]"
+                    />
                   </div>
                 </div>
 
@@ -360,10 +344,10 @@ export const PanduanAdminPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={isSyncing}
-                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="px-5 py-2.5 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     <Save className="w-4 h-4" />
-                    <span>{isSyncing ? 'Menyinkronkan...' : 'Simpan Kredensial & Hubungkan Database'}</span>
+                    <span>{isSyncing ? 'Menyinkronkan...' : 'Simpan Kredensial & Hubungkan Supabase'}</span>
                   </button>
                 </div>
               </form>

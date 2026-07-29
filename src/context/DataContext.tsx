@@ -335,9 +335,40 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     showSuccessToast('Tahun Pelajaran berhasil dihapus.');
   };
 
-  // Fetch teachers from Neon DB or Supabase on mount if available
+  // Fetch teachers from Supabase on mount if available
   useEffect(() => {
     const fetchTeachersFromDB = async () => {
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('role', 'guru');
+          if (data && !error && data.length > 0) {
+            const fetched: Profile[] = data.map((d: any) => ({
+              id: d.id,
+              email: d.email,
+              username: d.username,
+              fullName: d.full_name,
+              role: d.role,
+              nipNuptk: d.nip_nuptk,
+              phone: d.phone,
+              password: d.password,
+              avatarUrl: d.avatar_url,
+              avatarDriveId: d.avatar_drive_id,
+              createdAt: d.created_at,
+              updatedAt: d.updated_at
+            }));
+            setTeachers(fetched);
+            localStorage.setItem('guruku_teachers', JSON.stringify(fetched));
+            return;
+          }
+        } catch (e) {
+          console.warn('Gagal mengambil data guru dari Supabase:', e);
+        }
+      }
+
       const sql = getNeonSql();
       if (sql) {
         try {
@@ -359,36 +390,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }));
             setTeachers(fetched);
             localStorage.setItem('guruku_teachers', JSON.stringify(fetched));
-            return;
           }
         } catch (e) {
           console.warn('Gagal mengambil data guru dari Neon DB:', e);
-        }
-      }
-
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('role', 'guru');
-        if (data && !error && data.length > 0) {
-          const fetched: Profile[] = data.map((d: any) => ({
-            id: d.id,
-            email: d.email,
-            username: d.username,
-            fullName: d.full_name,
-            role: d.role,
-            nipNuptk: d.nip_nuptk,
-            phone: d.phone,
-            password: d.password,
-            avatarUrl: d.avatar_url,
-            avatarDriveId: d.avatar_drive_id,
-            createdAt: d.created_at,
-            updatedAt: d.updated_at
-          }));
-          setTeachers(fetched);
-          localStorage.setItem('guruku_teachers', JSON.stringify(fetched));
         }
       }
     };
