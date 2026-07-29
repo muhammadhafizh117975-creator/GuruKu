@@ -104,8 +104,12 @@ export function getSupabaseClient(): SupabaseClient | null {
   if (supabaseClientInstance) return supabaseClientInstance;
 
   const env = (import.meta as any).env || {};
-  const url = env.VITE_SUPABASE_URL || localStorage.getItem('guruku_supabase_url');
-  const anonKey = env.VITE_SUPABASE_ANON_KEY || localStorage.getItem('guruku_supabase_key');
+  let url = (env.VITE_SUPABASE_URL || localStorage.getItem('guruku_supabase_url') || '').trim();
+  let anonKey = (env.VITE_SUPABASE_ANON_KEY || localStorage.getItem('guruku_supabase_key') || '').trim();
+
+  if (url) {
+    url = url.replace(/\/rest\/v1\/?$/i, '').replace(/\/+$/, '');
+  }
 
   if (url && anonKey) {
     try {
@@ -119,10 +123,13 @@ export function getSupabaseClient(): SupabaseClient | null {
 }
 
 export function resetSupabaseClient(url: string, key: string) {
-  if (url && key) {
-    localStorage.setItem('guruku_supabase_url', url);
-    localStorage.setItem('guruku_supabase_key', key);
-    supabaseClientInstance = createClient(url, key);
+  let cleanUrl = (url || '').trim().replace(/\/rest\/v1\/?$/i, '').replace(/\/+$/, '');
+  let cleanKey = (key || '').trim();
+
+  if (cleanUrl && cleanKey) {
+    localStorage.setItem('guruku_supabase_url', cleanUrl);
+    localStorage.setItem('guruku_supabase_key', cleanKey);
+    supabaseClientInstance = createClient(cleanUrl, cleanKey);
   } else {
     localStorage.removeItem('guruku_supabase_url');
     localStorage.removeItem('guruku_supabase_key');
