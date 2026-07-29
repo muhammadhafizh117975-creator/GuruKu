@@ -55,38 +55,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Query Supabase profiles table by email or username
         const { data, error } = await supabase
           .from('profiles')
-          .select('*')
-          .or(`email.ilike.${cleanInput},username.ilike.${cleanInput}`)
-          .maybeSingle();
+          .select('*');
 
-        if (data && !error) {
-          if (data.password && data.password !== _password) {
-            showErrorToast('Kata sandi (password) yang Anda masukkan tidak sesuai.');
+        if (data && !error && data.length > 0) {
+          const matched = data.find((d: any) =>
+            (d.email && d.email.toLowerCase() === cleanInput) ||
+            (d.username && d.username.toLowerCase() === cleanInput)
+          );
+
+          if (matched) {
+            if (matched.password && matched.password !== _password) {
+              showErrorToast('Kata sandi (password) yang Anda masukkan tidak sesuai.');
+              setLoading(false);
+              return false;
+            }
+
+            const profile: Profile = {
+              id: matched.id,
+              email: matched.email,
+              username: matched.username || cleanInput,
+              fullName: matched.full_name,
+              role: matched.role,
+              nipNuptk: matched.nip_nuptk,
+              phone: matched.phone,
+              password: matched.password || _password,
+              avatarUrl: matched.avatar_url,
+              avatarDriveId: matched.avatar_drive_id,
+              createdAt: matched.created_at,
+              updatedAt: matched.updated_at
+            };
+            setUser(profile);
+            if (rememberMe) {
+              localStorage.setItem('guruku_session_user', JSON.stringify(profile));
+            }
+            showSuccessToast(`Selamat datang kembali, ${profile.fullName}!`);
             setLoading(false);
-            return false;
+            return true;
           }
-
-          const profile: Profile = {
-            id: data.id,
-            email: data.email,
-            username: data.username || cleanInput,
-            fullName: data.full_name,
-            role: data.role,
-            nipNuptk: data.nip_nuptk,
-            phone: data.phone,
-            password: data.password || _password,
-            avatarUrl: data.avatar_url,
-            avatarDriveId: data.avatar_drive_id,
-            createdAt: data.created_at,
-            updatedAt: data.updated_at
-          };
-          setUser(profile);
-          if (rememberMe) {
-            localStorage.setItem('guruku_session_user', JSON.stringify(profile));
-          }
-          showSuccessToast(`Selamat datang kembali, ${profile.fullName}!`);
-          setLoading(false);
-          return true;
         }
       }
 
@@ -172,7 +177,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const supabase = getSupabaseClient();
     if (supabase) {
-      const { error } = await supabase.from('profiles').insert([{
+      const { error } = await supabase.from('profiles').upsert([{
         id: newGuru.id,
         email: newGuru.email,
         username: newGuru.username,

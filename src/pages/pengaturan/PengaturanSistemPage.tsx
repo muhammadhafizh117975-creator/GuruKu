@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
-import { AcademicYearItem } from '../../types';
+import { AcademicYearItem, Profile } from '../../types';
 import { GoogleDriveService } from '../../services/googleDrive';
-import { generateSupabaseSQLScript, resetSupabaseClient } from '../../services/supabase';
+import { generateSupabaseSQLScript, resetSupabaseClient, getSupabaseClient, INITIAL_PROFILES } from '../../services/supabase';
 import { KopSuratPreview } from '../../components/common/KopSuratPreview';
 import { Modal } from '../../components/common/Modal';
 import { showConfirmModal, showSuccessToast } from '../../components/common/SweetAlert';
@@ -39,7 +39,7 @@ export const PengaturanSistemPage: React.FC = () => {
     resetAllData
   } = useData();
 
-  const [activeTab, setActiveTab] = useState<'margin_kop' | 'tahun_pelajaran' | 'reset_data'>('tahun_pelajaran');
+  const [activeTab, setActiveTab] = useState<'margin_kop' | 'tahun_pelajaran' | 'supabase_sql' | 'reset_data'>('tahun_pelajaran');
 
   // Academic Year Modal State
   const [isAyModalOpen, setIsAyModalOpen] = useState<boolean>(false);
@@ -147,13 +147,48 @@ export const PengaturanSistemPage: React.FC = () => {
     }
   };
 
-  const handleSaveSupabaseConfig = (e: React.FormEvent) => {
+  const handleSaveSupabaseConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     resetSupabaseClient(supabaseUrl, supabaseAnonKey);
     updateSystemSettings({
       supabaseUrl,
       supabaseAnonKey
     });
+
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        const { error } = await client.from('profiles').select('id').limit(1);
+        if (!error) {
+          // Sync existing local teachers / admin profiles to Supabase profiles table
+          const savedTeachersRaw = localStorage.getItem('guruku_teachers');
+          let savedTeachers: Profile[] = [];
+          if (savedTeachersRaw) {
+            try { savedTeachers = JSON.parse(savedTeachersRaw); } catch (err) {}
+          }
+          const allProfs = [...INITIAL_PROFILES, ...savedTeachers];
+          for (const p of allProfs) {
+            await client.from('profiles').upsert({
+              id: p.id,
+              email: p.email,
+              username: p.username,
+              password: p.password || 'Gk-123456',
+              full_name: p.fullName,
+              role: p.role,
+              nip_nuptk: p.nipNuptk,
+              phone: p.phone,
+              avatar_url: p.avatarUrl,
+              created_at: p.createdAt,
+              updated_at: p.updatedAt
+            });
+          }
+          showSuccessToast('Kredensial disimpan! KONEKSI SUPABASE BERHASIL TERHUBUNG LANGSUNG. Seluruh data akun telah disinkronkan.');
+          return;
+        }
+      } catch (err) {
+        console.warn(err);
+      }
+    }
     showSuccessToast('Konfigurasi Supabase berhasil diperbarui.');
   };
 
@@ -221,6 +256,16 @@ export const PengaturanSistemPage: React.FC = () => {
             }`}
           >
             <FileText className="w-3.5 h-3.5" /> Margin & Kop Surat
+          </button>
+          <button
+            onClick={() => setActiveTab('supabase_sql')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeTab === 'supabase_sql'
+                ? 'bg-[#696cff] text-white shadow-xs'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5" /> Supabase & VPS
           </button>
           <button
             onClick={() => setActiveTab('reset_data')}
@@ -541,6 +586,95 @@ export const PengaturanSistemPage: React.FC = () => {
           {/* Interactive Live Preview Box */}
           <div className="lg:col-span-5">
             <KopSuratPreview settings={currentPreviewSettings} />
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'supabase_sql' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Supabase API Credentials Configuration Form */}
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-[#696cff]/10 text-[#696cff] rounded-2xl">
+                  <Database className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
+                    Koneksi Database Supabase Realtime
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Masukkan URL dan Anon Key dari Proyek Supabase Anda untuk mengaktifkan sinkronisasi database 24/7 di seluruh browser & perangkat.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveSupabaseConfig} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">
+                  Project URL (SUPABASE_URL)
+                </label>
+                <input
+                  type="text"
+                  value={supabaseUrl}
+                  onChange={(e) => setSupabaseUrl(e.target.value)}
+                  placeholder="https://xyzcompany.supabase.co"
+                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#696cff]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">
+                  API Key Anon / Public (SUPABASE_ANON_KEY)
+                </label>
+                <input
+                  type="password"
+                  value={supabaseAnonKey}
+                  onChange={(e) => setSupabaseAnonKey(e.target.value)}
+                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#696cff]"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="submit"
+                  className="px-6 py-3.5 rounded-2xl bg-[#696cff] hover:bg-[#5f61e6] text-white font-extrabold text-xs shadow-lg shadow-[#696cff]/30 transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" /> Terapkan & Hubungkan Supabase Langsung
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* SQL Migration Script Box */}
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-[#696cff]" /> Script SQL Migration Database (Supabase / aaPanel VPS)
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Salin script di bawah ini lalu jalankan di menu <strong>SQL Editor</strong> pada Dashboard Supabase Anda untuk membuat seluruh tabel & kebijakan RLS otomatis.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCopySql}
+                className="px-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-extrabold text-xs transition-all flex items-center gap-2 shrink-0 cursor-pointer"
+              >
+                {isCopied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                {isCopied ? 'Tersalin!' : 'Salin Script SQL'}
+              </button>
+            </div>
+
+            <div className="relative">
+              <pre className="p-4 rounded-2xl bg-slate-950 text-slate-100 font-mono text-[11px] leading-relaxed overflow-x-auto max-h-72 custom-scrollbar">
+                {sqlScript}
+              </pre>
+            </div>
           </div>
         </div>
       )}
