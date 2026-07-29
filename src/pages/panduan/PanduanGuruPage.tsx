@@ -65,17 +65,17 @@ export const PanduanGuruPage: React.FC = () => {
     },
     {
       id: 'modul',
-      category: 'Google Drive',
+      category: 'Modul Ajar',
       icon: <FolderArchive className="w-5 h-5 text-amber-500" />,
       title: '4. Mengunggah Arsip Modul Ajar / RPP',
       description:
-        'Menyimpan Modul Ajar, RPP, LKPD, dan media pembelajaran secara teratur ke Google Drive sekolah.',
+        'Menyimpan Modul Ajar, RPP, LKPD, dan media pembelajaran secara teratur ke sistem arsip sekolah.',
       steps: [
         'Masuk ke menu Arsip Modul / RPP di sidebar navigasi.',
         'Klik tab Unggah Baru.',
         'Isikan Judul Modul, Mata Pelajaran, Tingkat Kelas, Semester, dan Tahun Ajaran.',
         'Tarik & Lepas file dokumen (PDF, Word .docx, PPT .pptx, Excel .xlsx maks 25MB) pada area Dropzone.',
-        'Klik tombol Simpan & Unggah Dokumen. File akan otomatis terunggah ke folder Google Drive sekolah dan memiliki tautan akses langsung.'
+        'Klik tombol Simpan & Unggah Dokumen. File akan otomatis terunggah ke arsip sekolah dan dapat diakses kapan saja.'
       ]
     },
     {
@@ -149,11 +149,11 @@ export const PanduanGuruPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl overflow-x-auto w-full md:w-auto">
-          {['all', 'Akun & Keamanan', 'Data Akademik', 'Pembelajaran Harian', 'Google Drive', 'Laporan & Cetak'].map((cat) => (
+          {['all', 'Akun & Keamanan', 'Data Akademik', 'Pembelajaran Harian', 'Modul Ajar', 'Laporan & Cetak', 'Profil'].map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                 selectedCategory === cat
                   ? 'bg-[#696cff] text-white shadow-xs'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'

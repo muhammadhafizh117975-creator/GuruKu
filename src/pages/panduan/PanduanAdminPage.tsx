@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useData } from '../../context/DataContext';
-import { resetSupabaseClient } from '../../services/supabase';
+import { resetSupabaseClient, generateSupabaseSQLScript, getSupabaseClient, INITIAL_PROFILES } from '../../services/supabase';
 import { showSuccessToast } from '../../components/common/SweetAlert';
+import { Profile } from '../../types';
 import {
   ShieldAlert,
   Database,
@@ -18,7 +19,11 @@ import {
   FolderTree,
   Lock,
   Layers,
-  Save
+  Save,
+  RefreshCw,
+  Table,
+  GitFork,
+  Radio
 } from 'lucide-react';
 
 export const PanduanAdminPage: React.FC = () => {
@@ -30,24 +35,62 @@ export const PanduanAdminPage: React.FC = () => {
   // Supabase Credentials State
   const [supabaseUrl, setSupabaseUrl] = useState<string>(systemSettings.supabaseUrl || '');
   const [supabaseAnonKey, setSupabaseAnonKey] = useState<string>(systemSettings.supabaseAnonKey || '');
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
-  const handleSaveSupabaseConfig = (e: React.FormEvent) => {
+  const handleSaveSupabaseConfig = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSyncing(true);
     resetSupabaseClient(supabaseUrl, supabaseAnonKey);
     updateSystemSettings({
       supabaseUrl,
       supabaseAnonKey
     });
-    showSuccessToast('Konfigurasi Supabase Runtime & VPS berhasil diperbarui.');
+
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        const { error } = await client.from('profiles').select('id').limit(1);
+        if (!error) {
+          const savedTeachersRaw = localStorage.getItem('guruku_teachers');
+          let savedTeachers: Profile[] = [];
+          if (savedTeachersRaw) {
+            try { savedTeachers = JSON.parse(savedTeachersRaw); } catch (err) {}
+          }
+          const allProfs = [...INITIAL_PROFILES, ...savedTeachers];
+          for (const p of allProfs) {
+            await client.from('profiles').upsert({
+              id: p.id,
+              email: p.email,
+              username: p.username,
+              password: p.password || 'Gk-123456',
+              full_name: p.fullName,
+              role: p.role,
+              nip_nuptk: p.nipNuptk,
+              phone: p.phone,
+              avatar_url: p.avatarUrl,
+              created_at: p.createdAt,
+              updated_at: p.updatedAt
+            });
+          }
+          showSuccessToast('Kredensial disimpan! KONEKSI SUPABASE TERHUBUNG REALTIME & Data akun telah disinkronkan.');
+          setIsSyncing(false);
+          return;
+        }
+      } catch (err) {
+        console.warn(err);
+      }
+    }
+    showSuccessToast('Konfigurasi Supabase Runtime berhasil diperbarui.');
+    setIsSyncing(false);
   };
 
   // Checklist items
   const [checklist, setChecklist] = useState<Record<string, boolean>>({
     supa_proj: true,
-    supa_auth: true,
     supa_tables: true,
+    supa_relasi: true,
     supa_realtime: true,
-    supa_keys: false,
+    supa_env: true,
     gdrive_proj: true,
     gdrive_api: true,
     gdrive_sa: true,
@@ -58,149 +101,7 @@ export const PanduanAdminPage: React.FC = () => {
     setChecklist((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const sqlSchemaScript = `-- ==========================================
--- SCRIPT SKEMA DATABASE GURUKU SUPABASE
--- Silakan jalankan script ini di SQL Editor Supabase
--- ==========================================
-
--- 1. Buat Tabel Data Guru
-CREATE TABLE IF NOT EXISTS public.teachers (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  full_name TEXT NOT NULL,
-  nip_nuptk TEXT,
-  email TEXT UNIQUE NOT NULL,
-  phone TEXT,
-  role TEXT NOT NULL DEFAULT 'guru',
-  avatar_url TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 2. Buat Tabel Mata Pelajaran
-CREATE TABLE IF NOT EXISTS public.subjects (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL,
-  category TEXT DEFAULT 'Umum',
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 3. Buat Tabel Kelas & Tingkat
-CREATE TABLE IF NOT EXISTS public.classes (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  level TEXT NOT NULL,
-  academic_year TEXT NOT NULL,
-  homeroom_teacher_id UUID REFERENCES public.teachers(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 4. Buat Tabel Data Siswa
-CREATE TABLE IF NOT EXISTS public.students (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  nisn TEXT UNIQUE NOT NULL,
-  full_name TEXT NOT NULL,
-  gender TEXT NOT NULL,
-  class_id UUID REFERENCES public.classes(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 5. Buat Tabel Nilai Siswa
-CREATE TABLE IF NOT EXISTS public.student_grades (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
-  subject_id UUID REFERENCES public.subjects(id) ON DELETE CASCADE,
-  class_id UUID REFERENCES public.classes(id) ON DELETE CASCADE,
-  academic_year TEXT NOT NULL,
-  semester TEXT NOT NULL,
-  daily_score NUMERIC DEFAULT 0,
-  pts_score NUMERIC DEFAULT 0,
-  pas_score NUMERIC DEFAULT 0,
-  notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 6. Buat Tabel Presensi / Absensi
-CREATE TABLE IF NOT EXISTS public.attendances (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
-  class_id UUID REFERENCES public.classes(id) ON DELETE CASCADE,
-  date DATE NOT NULL,
-  status TEXT NOT NULL, -- 'Hadir', 'Izin', 'Sakit', 'Alfa'
-  notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 7. Buat Tabel Jurnal Mengajar
-CREATE TABLE IF NOT EXISTS public.teaching_journals (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  teacher_id UUID REFERENCES public.teachers(id) ON DELETE CASCADE,
-  class_id UUID REFERENCES public.classes(id) ON DELETE CASCADE,
-  subject_id UUID REFERENCES public.subjects(id) ON DELETE CASCADE,
-  date DATE NOT NULL,
-  materi TEXT NOT NULL,
-  catatan TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 8. Buat Tabel Arsip Modul Ajar / RPP (Google Drive)
-CREATE TABLE IF NOT EXISTS public.teaching_modules (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  title TEXT NOT NULL,
-  subject_id UUID REFERENCES public.subjects(id) ON DELETE CASCADE,
-  class_level TEXT NOT NULL,
-  semester TEXT NOT NULL,
-  academic_year TEXT NOT NULL,
-  description TEXT,
-  file_type TEXT NOT NULL,
-  file_name TEXT NOT NULL,
-  file_size TEXT,
-  file_drive_id TEXT,
-  web_view_link TEXT,
-  web_content_link TEXT,
-  teacher_id UUID REFERENCES public.teachers(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 9. Buat Tabel Pengaturan Sistem
-CREATE TABLE IF NOT EXISTS public.system_settings (
-  id INT PRIMARY KEY DEFAULT 1,
-  paper_margin JSONB,
-  letterhead JSONB,
-  google_drive_connected BOOLEAN DEFAULT true,
-  google_drive_folder_name TEXT DEFAULT 'GuruKu_Storage',
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 10. Mengaktifkan Row Level Security (RLS)
-ALTER TABLE public.teachers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.subjects ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.classes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.student_grades ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.attendances ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.teaching_journals ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.teaching_modules ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
-
--- 11. Kebijakan RLS (Public Read / Authenticated Write)
-CREATE POLICY "Public Read Access" ON public.teachers FOR SELECT USING (true);
-CREATE POLICY "Public Read Access" ON public.subjects FOR SELECT USING (true);
-CREATE POLICY "Public Read Access" ON public.classes FOR SELECT USING (true);
-CREATE POLICY "Public Read Access" ON public.students FOR SELECT USING (true);
-CREATE POLICY "Public Read Access" ON public.student_grades FOR SELECT USING (true);
-CREATE POLICY "Public Read Access" ON public.attendances FOR SELECT USING (true);
-CREATE POLICY "Public Read Access" ON public.teaching_journals FOR SELECT USING (true);
-CREATE POLICY "Public Read Access" ON public.teaching_modules FOR SELECT USING (true);
-CREATE POLICY "Public Read Access" ON public.system_settings FOR SELECT USING (true);
-
--- 12. Mengaktifkan Fitur Supabase Realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE public.teachers;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.student_grades;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.attendances;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.teaching_journals;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.teaching_modules;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.system_settings;
-`;
+  const sqlSchemaScript = generateSupabaseSQLScript();
 
   const handleCopySql = () => {
     navigator.clipboard.writeText(sqlSchemaScript);
@@ -219,10 +120,10 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.system_settings;
             <ShieldAlert className="w-3.5 h-3.5" /> Khusus Administrator Sekolah
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Panduan Complete Setup Infrastructure GuruKu
+            Panduan Lengkap Setup Database Supabase & Infrastruktur GuruKu
           </h1>
           <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
-            Ikuti instruksi langkah demi langkah ini untuk menghubungkan database Supabase (Authentication & Realtime) dan Google Drive API sebagai pusat penyimpanan dokumen sekolah.
+            Petunjuk konfigurasi pusat data Supabase (Realtime, Table Editor, Relasi, RLS) dan Google Drive API agar seluruh akun Guru & Admin dapat mengakses aplikasi dari browser & perangkat mana saja secara sinkron.
           </p>
         </div>
 
@@ -230,17 +131,17 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.system_settings;
         <div className="mt-6 flex flex-wrap items-center gap-2 pt-4 border-t border-slate-800">
           <button
             onClick={() => setActiveTab('supabase')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'supabase'
                 ? 'bg-[#696cff] text-white shadow-md'
                 : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
             }`}
           >
-            <Database className="w-4 h-4" /> 1. Setup Supabase
+            <Database className="w-4 h-4" /> 1. Panduan Konfigurasi Supabase
           </button>
           <button
             onClick={() => setActiveTab('gdrive')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'gdrive'
                 ? 'bg-[#696cff] text-white shadow-md'
                 : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
@@ -250,7 +151,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.system_settings;
           </button>
           <button
             onClick={() => setActiveTab('checklist')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'checklist'
                 ? 'bg-[#696cff] text-white shadow-md'
                 : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
@@ -264,59 +165,121 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.system_settings;
       {/* SECTION 1: SUPABASE SETUP */}
       {activeTab === 'supabase' && (
         <div className="space-y-6">
-          {/* Step Steps */}
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
-            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2.5">
-              <Database className="w-5 h-5 text-[#696cff]" /> Langkah-langkah Konfigurasi Supabase
-            </h2>
+          {/* Detailed 5 Steps Guide */}
+          <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-8">
+            <div>
+              <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2.5">
+                <Database className="w-6 h-6 text-[#696cff]" /> Langkah-Langkah Konfigurasi Supabase Database
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                Ikuti 5 langkah utama berikut untuk memasang database cloud Supabase, mengonfigurasikan tabel, relasi, RLS, serta menyinkronkan data secara realtime.
+              </p>
+            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {/* Step 1 */}
-              <div className="p-5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 space-y-2">
-                <div className="w-7 h-7 rounded-xl bg-[#696cff] text-white font-extrabold text-xs flex items-center justify-center">
-                  1
+              <div className="p-5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-xl bg-[#696cff] text-white font-extrabold text-xs flex items-center justify-center">
+                    1
+                  </div>
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-[#696cff]/10 text-[#696cff]">
+                    Proyek Supabase
+                  </span>
                 </div>
-                <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Buat Project Supabase Baru</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Kunjungi{' '}
-                  <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-[#696cff] hover:underline font-semibold inline-flex items-center gap-0.5">
+                <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Membuat Project Supabase</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Buka{' '}
+                  <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-[#696cff] hover:underline font-bold inline-flex items-center gap-0.5">
                     supabase.com <ExternalLink className="w-3 h-3" />
                   </a>
-                  , buat akun baru, lalu klik "New Project". Isikan nama project misal "GuruKu Academia" dan set Password Database.
+                  , login/register, lalu klik <strong>New Project</strong>. Beri nama proyek (contoh: <code>GuruKu-Database</code>), tentukan Password Database, dan pilih region terdekat (misal: Singapore).
                 </p>
               </div>
 
               {/* Step 2 */}
-              <div className="p-5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 space-y-2">
-                <div className="w-7 h-7 rounded-xl bg-[#696cff] text-white font-extrabold text-xs flex items-center justify-center">
-                  2
+              <div className="p-5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-xl bg-[#696cff] text-white font-extrabold text-xs flex items-center justify-center">
+                    2
+                  </div>
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500">
+                    Table & SQL Editor
+                  </span>
                 </div>
-                <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Aktifkan Authentication</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Buka menu <strong>Authentication &gt; Providers</strong> di dashboard Supabase Anda. Pastikan Provider <strong>Email / Password</strong> dalam status Enabled.
+                <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                  <Table className="w-4 h-4 text-emerald-500" /> Membuat Database & Tabel
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Anda dapat membuat tabel melalui menu <strong>Table Editor</strong> di Supabase, atau lebih praktis salin script SQL di bawah ini dan jalankan di menu <strong>SQL Editor</strong> untuk menginstalasikan 9 tabel utama secara otomatis.
                 </p>
               </div>
 
               {/* Step 3 */}
-              <div className="p-5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 space-y-2">
-                <div className="w-7 h-7 rounded-xl bg-[#696cff] text-white font-extrabold text-xs flex items-center justify-center">
-                  3
+              <div className="p-5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-xl bg-[#696cff] text-white font-extrabold text-xs flex items-center justify-center">
+                    3
+                  </div>
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500">
+                    Foreign Keys
+                  </span>
                 </div>
-                <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Dapatkan API URL & Anon Key</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Buka menu <strong>Project Settings &gt; API</strong>. Salin <code>Project URL</code> dan <code>anon / public key</code>. Inputkan di menu Pengaturan Sistem aplikasi ini.
+                <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                  <GitFork className="w-4 h-4 text-indigo-500" /> Mengatur Relasi Antar Tabel
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Tabel <code>grades</code>, <code>attendance</code>, <code>teaching_journals</code>, dan <code>teaching_modules</code> secara otomatis terhubung ke tabel <code>profiles</code>, <code>students</code>, <code>classes</code>, dan <code>subjects</code> via Kunci Asing (Foreign Keys & Cascade Delete).
+                </p>
+              </div>
+
+              {/* Step 4 */}
+              <div className="p-5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-xl bg-[#696cff] text-white font-extrabold text-xs flex items-center justify-center">
+                    4
+                  </div>
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500">
+                    Realtime & RLS
+                  </span>
+                </div>
+                <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                  <Radio className="w-4 h-4 text-amber-500" /> Realtime & Row Level Security
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Script SQL di bawah ini akan mengaktifkan <strong>Row Level Security (RLS)</strong> untuk semua tabel dengan kebijakan izin operasi, serta mendaftarkan seluruh tabel ke publikasi <code>supabase_realtime</code>.
+                </p>
+              </div>
+
+              {/* Step 5 */}
+              <div className="p-5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 space-y-3 col-span-1 md:col-span-2 lg:col-span-2">
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-xl bg-[#696cff] text-white font-extrabold text-xs flex items-center justify-center">
+                    5
+                  </div>
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-[#696cff]/10 text-[#696cff]">
+                    Environment & Sinkronisasi
+                  </span>
+                </div>
+                <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                  <RefreshCw className="w-4 h-4 text-[#696cff]" /> Sinkronisasi Kredensial & File .env
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Buka menu <strong>Project Settings &gt; API</strong> di Supabase untuk menyalin <code>Project URL</code> dan <code>anon / public key</code>. Simpan dalam file <code>.env</code> project (sebagai <code>VITE_SUPABASE_URL</code> dan <code>VITE_SUPABASE_ANON_KEY</code>) atau langsung masukkan pada formulir di bawah ini agar aplikasi terhubung secara instan di semua perangkat.
                 </p>
               </div>
             </div>
 
-            {/* Konfigurasi Kredensial Supabase Runtime Form */}
-            <div className="p-5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
-              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <Database className="w-4 h-4 text-[#696cff]" /> Konfigurasi Kredensial Supabase Runtime & VPS
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Masukkan Supabase URL dan Anon Key untuk menghubungkan aplikasi secara langsung ke instance Supabase sekolah.
-              </p>
+            {/* Form Input Live Credentials */}
+            <div className="p-6 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700">
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <Database className="w-4 h-4 text-[#696cff]" /> Hubungkan Kredensial Supabase Secara Direct
+                </h3>
+                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg">
+                  Akses Multi-Browser & Multi-Perangkat
+                </span>
+              </div>
 
               <form onSubmit={handleSaveSupabaseConfig} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -346,10 +309,11 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.system_settings;
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    className="px-5 py-2.5 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 flex items-center gap-2"
+                    disabled={isSyncing}
+                    className="px-5 py-2.5 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     <Save className="w-4 h-4" />
-                    <span>Terapkan Kredensial Supabase</span>
+                    <span>{isSyncing ? 'Menyinkronkan...' : 'Simpan Kredensial & Hubungkan Supabase'}</span>
                   </button>
                 </div>
               </form>
@@ -357,22 +321,22 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.system_settings;
 
             {/* SQL Script Box */}
             <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                    <Terminal className="w-4 h-4 text-[#696cff]" /> SQL Schema Installation Script
+                    <Terminal className="w-4 h-4 text-[#696cff]" /> Master Script SQL Installation Database
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Buka menu <strong>SQL Editor</strong> di dashboard Supabase, tempelkan (paste) script berikut lalu klik <strong>RUN</strong>.
+                    Buka menu <strong>SQL Editor</strong> pada dashboard Supabase Anda, tempelkan (paste) script ini lalu klik <strong>RUN</strong>.
                   </p>
                 </div>
 
                 <button
                   onClick={handleCopySql}
-                  className="px-4 py-2 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 transition-all flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   {copiedSql ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-                  <span>{copiedSql ? 'Tersalin!' : 'Salin SQL Script'}</span>
+                  <span>{copiedSql ? 'Tersalin!' : 'Salin Script SQL Supabase'}</span>
                 </button>
               </div>
 
@@ -386,7 +350,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.system_settings;
 
       {/* SECTION 2: GOOGLE DRIVE SETUP */}
       {activeTab === 'gdrive' && (
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
+        <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
           <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
             <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2.5">
               <HardDrive className="w-5 h-5 text-emerald-500" /> Panduan Menghubungkan 1 Akun Google Drive Utama
@@ -463,7 +427,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.system_settings;
 
       {/* SECTION 3: CHECKLIST */}
       {activeTab === 'checklist' && (
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+        <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
           <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5 text-emerald-500" /> Interactive Setup Readiness Checklist
           </h2>
@@ -473,11 +437,11 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.system_settings;
 
           <div className="space-y-2 pt-2">
             {[
-              { id: 'supa_proj', label: 'Project Supabase telah dibuat' },
-              { id: 'supa_auth', label: 'Authentication Provider Email/Password diaktifkan' },
-              { id: 'supa_tables', label: 'Tabel database telah di-install melalui SQL Editor' },
-              { id: 'supa_realtime', label: 'Fitur Supabase Realtime telah di-enable untuk publikasi' },
-              { id: 'supa_keys', label: 'Supabase URL & Anon Key telah diinput di Pengaturan Sistem' },
+              { id: 'supa_proj', label: 'Proyek Supabase telah dibuat di Supabase.com' },
+              { id: 'supa_tables', label: 'Seluruh 9 Tabel utama dibuat via SQL Editor / Table Editor' },
+              { id: 'supa_relasi', label: 'Relasi antar tabel (Foreign Keys & Constraints) telah terpasang' },
+              { id: 'supa_realtime', label: 'Fitur Supabase Realtime & RLS Policies telah diaktifkan' },
+              { id: 'supa_env', label: 'Supabase URL & Anon Key dikonfigurasi di file .env dan Setup Admin' },
               { id: 'gdrive_proj', label: 'Google Cloud Project telah disiapkan' },
               { id: 'gdrive_api', label: 'Google Drive API telah di-Enable' },
               { id: 'gdrive_sa', label: 'Service Account & JSON Key telah dikonfigurasi' },
