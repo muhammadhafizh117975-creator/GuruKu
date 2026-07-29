@@ -84,12 +84,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // Fallback local check by username or email
-      const matched = INITIAL_PROFILES.find((p) =>
+      let savedTeachers: Profile[] = [];
+      const savedTeachersRaw = localStorage.getItem('guruku_teachers');
+      if (savedTeachersRaw) {
+        try {
+          savedTeachers = JSON.parse(savedTeachersRaw);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      const allProfiles = [...INITIAL_PROFILES, ...savedTeachers];
+      const matched = allProfiles.find((p) =>
         p.email.toLowerCase() === cleanInput ||
         (p.username && p.username.toLowerCase() === cleanInput)
       );
 
       if (matched) {
+        if (matched.password && matched.password !== _password) {
+          showErrorToast('Kata sandi (password) yang Anda masukkan tidak sesuai.');
+          setLoading(false);
+          return false;
+        }
+
         setUser(matched);
         if (rememberMe) {
           localStorage.setItem('guruku_session_user', JSON.stringify(matched));
@@ -195,6 +212,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const adminResetPasswordGuru = async (guruId: string, guruName: string, newPass: string): Promise<boolean> => {
+    // Update in INITIAL_PROFILES
+    const foundInInitial = INITIAL_PROFILES.find((p) => p.id === guruId);
+    if (foundInInitial) {
+      foundInInitial.password = newPass;
+    }
+
+    // Update in localStorage guruku_teachers
+    const savedTeachersRaw = localStorage.getItem('guruku_teachers');
+    if (savedTeachersRaw) {
+      try {
+        const savedTeachers: Profile[] = JSON.parse(savedTeachersRaw);
+        const updated = savedTeachers.map((t) => (t.id === guruId ? { ...t, password: newPass } : t));
+        localStorage.setItem('guruku_teachers', JSON.stringify(updated));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
     const supabase = getSupabaseClient();
     if (supabase) {
       await supabase.from('profiles').update({

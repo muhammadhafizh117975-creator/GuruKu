@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useData } from '../../context/DataContext';
+import { resetSupabaseClient } from '../../services/supabase';
 import { showSuccessToast } from '../../components/common/SweetAlert';
 import {
   ShieldAlert,
@@ -15,12 +17,29 @@ import {
   Check,
   FolderTree,
   Lock,
-  Layers
+  Layers,
+  Save
 } from 'lucide-react';
 
 export const PanduanAdminPage: React.FC = () => {
+  const { systemSettings, updateSystemSettings } = useData();
+
   const [copiedSql, setCopiedSql] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'supabase' | 'gdrive' | 'checklist'>('supabase');
+
+  // Supabase Credentials State
+  const [supabaseUrl, setSupabaseUrl] = useState<string>(systemSettings.supabaseUrl || '');
+  const [supabaseAnonKey, setSupabaseAnonKey] = useState<string>(systemSettings.supabaseAnonKey || '');
+
+  const handleSaveSupabaseConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    resetSupabaseClient(supabaseUrl, supabaseAnonKey);
+    updateSystemSettings({
+      supabaseUrl,
+      supabaseAnonKey
+    });
+    showSuccessToast('Konfigurasi Supabase Runtime & VPS berhasil diperbarui.');
+  };
 
   // Checklist items
   const [checklist, setChecklist] = useState<Record<string, boolean>>({
@@ -288,6 +307,52 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.system_settings;
                   Buka menu <strong>Project Settings &gt; API</strong>. Salin <code>Project URL</code> dan <code>anon / public key</code>. Inputkan di menu Pengaturan Sistem aplikasi ini.
                 </p>
               </div>
+            </div>
+
+            {/* Konfigurasi Kredensial Supabase Runtime Form */}
+            <div className="p-5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
+              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <Database className="w-4 h-4 text-[#696cff]" /> Konfigurasi Kredensial Supabase Runtime & VPS
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Masukkan Supabase URL dan Anon Key untuk menghubungkan aplikasi secara langsung ke instance Supabase sekolah.
+              </p>
+
+              <form onSubmit={handleSaveSupabaseConfig} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">VITE_SUPABASE_URL</label>
+                    <input
+                      type="text"
+                      value={supabaseUrl}
+                      onChange={(e) => setSupabaseUrl(e.target.value)}
+                      placeholder="https://xyzcompany.supabase.co"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-[#696cff]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">VITE_SUPABASE_ANON_KEY</label>
+                    <input
+                      type="password"
+                      value={supabaseAnonKey}
+                      onChange={(e) => setSupabaseAnonKey(e.target.value)}
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-[#696cff]"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 flex items-center gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Terapkan Kredensial Supabase</span>
+                  </button>
+                </div>
+              </form>
             </div>
 
             {/* SQL Script Box */}

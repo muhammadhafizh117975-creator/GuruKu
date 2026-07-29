@@ -15,7 +15,7 @@ import {
 
 export const KelasPage: React.FC = () => {
   const { user } = useAuth();
-  const { classes, teachers, students, addClass, updateClass, deleteClass } = useData();
+  const { classes, teachers, students, addClass, updateClass, deleteClass, activeAcademicYear } = useData();
 
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -24,7 +24,7 @@ export const KelasPage: React.FC = () => {
   // Form State
   const [name, setName] = useState<string>('');
   const [gradeLevel, setGradeLevel] = useState<string>('7');
-  const [academicYear, setAcademicYear] = useState<string>('2025/2026');
+  const [academicYear, setAcademicYear] = useState<string>(activeAcademicYear.year || '2025/2026');
   const [homeroomTeacherId, setHomeroomTeacherId] = useState<string>('');
 
   const isAdmin = user?.role === 'admin';
@@ -33,7 +33,7 @@ export const KelasPage: React.FC = () => {
     setEditingCls(null);
     setName('');
     setGradeLevel('7');
-    setAcademicYear('2025/2026');
+    setAcademicYear(activeAcademicYear.year || '2025/2026');
     setHomeroomTeacherId('');
     setIsModalOpen(true);
   };

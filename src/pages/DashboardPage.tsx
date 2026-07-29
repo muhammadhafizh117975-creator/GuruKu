@@ -54,7 +54,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActiveTab }) =>
     modules,
     grades,
     attendance,
-    activityLogs
+    activityLogs,
+    activeAcademicYear
   } = useData();
 
   const isAdmin = user?.role === 'admin';
@@ -129,9 +130,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActiveTab }) =>
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#696cff] via-[#787bff] to-[#8592a3] p-6 sm:p-8 text-white shadow-xl shadow-[#696cff]/20">
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="space-y-2">
-            <span className="inline-block text-xs font-extrabold uppercase tracking-widest bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-white">
-              Portal Akademik {isAdmin ? 'Administrator' : 'Guru Pengajar'}
-            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-block text-xs font-extrabold uppercase tracking-widest bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-white">
+                Portal Akademik {isAdmin ? 'Administrator' : 'Guru Pengajar'}
+              </span>
+              <span className="inline-block text-xs font-extrabold uppercase tracking-widest bg-emerald-500/80 backdrop-blur-md px-3 py-1 rounded-full text-white border border-emerald-300/40">
+                TA: {activeAcademicYear.year} (Semester {activeAcademicYear.semester})
+              </span>
+            </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
               Selamat Datang, {user?.fullName}! 👋
             </h1>

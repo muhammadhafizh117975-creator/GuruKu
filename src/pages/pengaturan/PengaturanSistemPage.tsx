@@ -39,7 +39,7 @@ export const PengaturanSistemPage: React.FC = () => {
     resetAllData
   } = useData();
 
-  const [activeTab, setActiveTab] = useState<'margin_kop' | 'tahun_pelajaran' | 'supabase_sql' | 'reset_data'>('tahun_pelajaran');
+  const [activeTab, setActiveTab] = useState<'margin_kop' | 'tahun_pelajaran' | 'reset_data'>('tahun_pelajaran');
 
   // Academic Year Modal State
   const [isAyModalOpen, setIsAyModalOpen] = useState<boolean>(false);
@@ -221,16 +221,6 @@ export const PengaturanSistemPage: React.FC = () => {
             }`}
           >
             <FileText className="w-3.5 h-3.5" /> Margin & Kop Surat
-          </button>
-          <button
-            onClick={() => setActiveTab('supabase_sql')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === 'supabase_sql'
-                ? 'bg-[#696cff] text-white shadow-xs'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            <Database className="w-3.5 h-3.5" /> Supabase & VPS
           </button>
           <button
             onClick={() => setActiveTab('reset_data')}
@@ -551,75 +541,6 @@ export const PengaturanSistemPage: React.FC = () => {
           {/* Interactive Live Preview Box */}
           <div className="lg:col-span-5">
             <KopSuratPreview settings={currentPreviewSettings} />
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'supabase_sql' && (
-        <div className="space-y-6">
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-            <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Database className="w-5 h-5 text-[#696cff]" /> Konfigurasi Kredensial Supabase Runtime
-            </h3>
-
-            <form onSubmit={handleSaveSupabaseConfig} className="space-y-4 max-w-2xl">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">VITE_SUPABASE_URL</label>
-                <input
-                  type="text"
-                  value={supabaseUrl}
-                  onChange={(e) => setSupabaseUrl(e.target.value)}
-                  placeholder="https://xyzcompany.supabase.co"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">VITE_SUPABASE_ANON_KEY</label>
-                <input
-                  type="password"
-                  value={supabaseAnonKey}
-                  onChange={(e) => setSupabaseAnonKey(e.target.value)}
-                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="px-5 py-2.5 rounded-xl bg-[#696cff] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 hover:bg-[#5f61e6]"
-              >
-                Terapkan Kredensial Supabase
-              </button>
-            </form>
-          </div>
-
-          {/* SQL Migration Exporter */}
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  <Database className="w-5 h-5 text-emerald-500" /> SQL Schema & RLS Replication Exporter (aaPanel VPS)
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Salin script SQL di bawah ini dan paste ke Supabase SQL Editor untuk membuat tabel dan mengaktifkan Realtime postgres_changes
-                </p>
-              </div>
-
-              <button
-                onClick={handleCopySql}
-                className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs transition-all flex items-center gap-1.5 shadow-md shadow-emerald-500/20"
-              >
-                {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                <span>{isCopied ? 'Tersalin!' : 'Copy SQL Script'}</span>
-              </button>
-            </div>
-
-            <div className="relative">
-              <pre className="p-4 bg-slate-950 text-emerald-400 rounded-2xl text-[11px] font-mono h-80 overflow-y-auto custom-scrollbar leading-relaxed">
-                {sqlScript}
-              </pre>
-            </div>
           </div>
         </div>
       )}

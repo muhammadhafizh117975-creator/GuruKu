@@ -6,12 +6,18 @@ import { Award, Save, FileSpreadsheet, Download } from 'lucide-react';
 
 export const NilaiPage: React.FC = () => {
   const { user } = useAuth();
-  const { subjects, classes, students, grades, systemSettings, saveGrade } = useData();
+  const { subjects, classes, students, grades, systemSettings, saveGrade, activeAcademicYear } = useData();
 
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjects[0]?.id || '');
   const [selectedClassId, setSelectedClassId] = useState<string>(classes[0]?.id || '');
-  const [semester, setSemester] = useState<'1' | '2'>('1');
-  const [academicYear] = useState<string>('2025/2026');
+  const [semester, setSemester] = useState<'1' | '2'>(activeAcademicYear.semester || '1');
+  const academicYear = activeAcademicYear.year || '2025/2026';
+
+  React.useEffect(() => {
+    if (activeAcademicYear?.semester) {
+      setSemester(activeAcademicYear.semester);
+    }
+  }, [activeAcademicYear]);
 
   // Matrix state for inputs
   const classStudents = students.filter((s) => s.classId === selectedClassId);

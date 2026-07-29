@@ -23,7 +23,7 @@ import {
 
 export const ArsipModulPage: React.FC = () => {
   const { user } = useAuth();
-  const { subjects, modules, addModule, deleteModule, systemSettings } = useData();
+  const { subjects, modules, addModule, deleteModule, systemSettings, activeAcademicYear } = useData();
 
   const [activeTab, setActiveTab] = useState<'arsip' | 'upload' | 'gdrive_status'>('arsip');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
@@ -39,8 +39,15 @@ export const ArsipModulPage: React.FC = () => {
   const [title, setTitle] = useState<string>('');
   const [subjectId, setSubjectId] = useState<string>(subjects[0]?.id || '');
   const [classLevel, setClassLevel] = useState<string>('7');
-  const [semester, setSemester] = useState<'1' | '2'>('1');
-  const [academicYear, setAcademicYear] = useState<string>('2025/2026');
+  const [semester, setSemester] = useState<'1' | '2'>(activeAcademicYear.semester || '1');
+  const [academicYear, setAcademicYear] = useState<string>(activeAcademicYear.year || '2025/2026');
+
+  React.useEffect(() => {
+    if (activeAcademicYear) {
+      setAcademicYear(activeAcademicYear.year);
+      setSemester(activeAcademicYear.semester);
+    }
+  }, [activeAcademicYear]);
   const [description, setDescription] = useState<string>('');
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
