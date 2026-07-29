@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { Modal } from '../../components/common/Modal';
+import { showSuccessToast } from '../../components/common/SweetAlert';
 import { Profile } from '../../types';
 import {
   Users,
@@ -15,7 +16,9 @@ import {
   UserCheck,
   AtSign,
   Lock,
-  RefreshCw
+  RefreshCw,
+  Copy,
+  CheckCircle2
 } from 'lucide-react';
 
 export const GuruPage: React.FC = () => {
@@ -31,6 +34,14 @@ export const GuruPage: React.FC = () => {
   const [email, setEmail] = useState<string>('');
   const [nipNuptk, setNipNuptk] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
+
+  // Created Guru Info Modal State (shows auto-generated password)
+  const [createdGuruInfo, setCreatedGuruInfo] = useState<{
+    fullName: string;
+    username: string;
+    email: string;
+    password?: string;
+  } | null>(null);
 
   // Reset Password Modal State
   const [resetModalTeacher, setResetModalTeacher] = useState<Profile | null>(null);
@@ -60,14 +71,39 @@ export const GuruPage: React.FC = () => {
     e.preventDefault();
     if (!fullName || !username || !email || !nipNuptk) return;
 
-    const success = await registerGuru(fullName, email, username, nipNuptk, phone);
-    if (success) {
+    const result = await registerGuru(fullName, email, username, nipNuptk, phone);
+    if (result.success && result.password) {
       setIsModalOpen(false);
+      setCreatedGuruInfo({
+        fullName,
+        username: username.trim().toLowerCase(),
+        email,
+        password: result.password
+      });
       setFullName('');
       setUsername('');
       setEmail('');
       setNipNuptk('');
       setPhone('');
+    }
+  };
+
+  const handleCopyPassword = () => {
+    if (createdGuruInfo?.password) {
+      navigator.clipboard.writeText(createdGuruInfo.password);
+      showSuccessToast('Password berhasil disalin ke clipboard!');
+    }
+  };
+
+  const handleCopyAllInfo = () => {
+    if (createdGuruInfo) {
+      const text = `Kredensial Akun Guru:
+Nama: ${createdGuruInfo.fullName}
+Username: @${createdGuruInfo.username}
+Email: ${createdGuruInfo.email}
+Password: ${createdGuruInfo.password}`;
+      navigator.clipboard.writeText(text);
+      showSuccessToast('Informasi akun lengkap berhasil disalin!');
     }
   };
 
@@ -276,22 +312,107 @@ export const GuruPage: React.FC = () => {
             />
           </div>
 
+          <div className="p-3.5 bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-2xl flex items-start gap-3">
+            <KeyRound className="w-5 h-5 text-[#696cff] shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <p className="text-xs font-bold text-indigo-950 dark:text-indigo-200">
+                Password Dibuat Otomatis oleh Sistem
+              </p>
+              <p className="text-[11px] text-indigo-700 dark:text-indigo-300 leading-relaxed">
+                Password akan secara otomatis dibuat oleh sistem saat Anda menyimpan akun ini. Anda dapat melihat dan menyalin password tersebut setelah akun berhasil disimpan untuk diberitahukan kepada Guru.
+              </p>
+            </div>
+          </div>
+
           <div className="pt-3 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-200"
+              className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-200 cursor-pointer"
             >
               Batal
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl bg-[#696cff] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 hover:bg-[#5f61e6]"
+              className="px-5 py-2.5 rounded-xl bg-[#696cff] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 hover:bg-[#5f61e6] cursor-pointer"
             >
               Simpan Data Guru
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal Result Display Generated Password */}
+      <Modal
+        isOpen={!!createdGuruInfo}
+        onClose={() => setCreatedGuruInfo(null)}
+        title="Akun Guru Berhasil Dibuat!"
+        subtitle="Password telah dihasilkan otomatis oleh sistem. Beritahukan informasi berikut kepada Guru."
+      >
+        {createdGuruInfo && (
+          <div className="space-y-5">
+            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl flex items-center gap-3">
+              <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
+              <div>
+                <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200">Akun Guru Siap Digunakan</p>
+                <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
+                  Berikan username & password otomatis ini kepada Guru bersangkutan untuk login.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nama Guru</span>
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{createdGuruInfo.fullName}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Username Login</span>
+                  <p className="text-xs font-mono font-bold text-[#696cff]">@{createdGuruInfo.username}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Email</span>
+                  <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{createdGuruInfo.email}</p>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Password Otomatis Sistem</span>
+                <div className="mt-1 flex items-center justify-between bg-white dark:bg-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600">
+                  <span className="text-base font-mono font-extrabold text-slate-900 dark:text-slate-100 tracking-wider">
+                    {createdGuruInfo.password}
+                  </span>
+                  <button
+                    onClick={handleCopyPassword}
+                    type="button"
+                    className="px-3 py-1.5 rounded-lg bg-[#696cff]/10 text-[#696cff] hover:bg-[#696cff] hover:text-white font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Copy className="w-3.5 h-3.5" /> Salin Password
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 flex items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                onClick={handleCopyAllInfo}
+                type="button"
+                className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold text-xs transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <Copy className="w-4 h-4 text-[#696cff]" /> Salin Semua Kredensial
+              </button>
+              <button
+                onClick={() => setCreatedGuruInfo(null)}
+                type="button"
+                className="px-5 py-2.5 rounded-xl bg-[#696cff] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 hover:bg-[#5f61e6] transition-all cursor-pointer"
+              >
+                Selesai
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Modal Reset Password by Admin */}

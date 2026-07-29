@@ -3,6 +3,12 @@ import { Profile, UserRole } from '../types';
 import { INITIAL_PROFILES, getSupabaseClient } from '../services/supabase';
 import { showSuccessToast, showErrorToast } from '../components/common/SweetAlert';
 
+export interface RegisterGuruResult {
+  success: boolean;
+  password?: string;
+  profile?: Profile;
+}
+
 interface AuthContextType {
   user: Profile | null;
   loading: boolean;
@@ -10,7 +16,7 @@ interface AuthContextType {
   setRememberMe: (value: boolean) => void;
   login: (identifier: string, password: string) => Promise<boolean>;
   logout: () => void;
-  registerGuru: (fullName: string, email: string, username: string, nipNuptk: string, phone: string) => Promise<boolean>;
+  registerGuru: (fullName: string, email: string, username: string, nipNuptk: string, phone: string) => Promise<RegisterGuruResult>;
   updateProfile: (updatedData: Partial<Profile>) => Promise<boolean>;
   adminResetPasswordGuru: (guruId: string, guruName: string, newPass: string) => Promise<boolean>;
   resetPassword: (identifier: string) => Promise<boolean>;
@@ -109,14 +115,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     showSuccessToast('Berhasil keluar dari sesi.');
   };
 
-  const registerGuru = async (fullName: string, email: string, username: string, nipNuptk: string, phone: string): Promise<boolean> => {
+  const registerGuru = async (fullName: string, email: string, username: string, nipNuptk: string, phone: string): Promise<RegisterGuruResult> => {
     const cleanUsername = username.trim().toLowerCase();
     
     // Check uniqueness
     const exists = INITIAL_PROFILES.some((p) => p.username?.toLowerCase() === cleanUsername || p.email.toLowerCase() === email.toLowerCase());
     if (exists) {
       showErrorToast(`Username '${cleanUsername}' atau email '${email}' sudah digunakan oleh pengguna lain.`);
-      return false;
+      return { success: false };
+    }
+
+    // Generate automatic password
+    const chars = '23456789abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ';
+    let autoPassword = 'Gk-';
+    for (let i = 0; i < 6; i++) {
+      autoPassword += chars.charAt(Math.floor(Math.random() * chars.length));
     }
 
     const newGuru: Profile = {
@@ -127,6 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       role: 'guru',
       nipNuptk,
       phone,
+      password: autoPassword,
       avatarUrl: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -148,8 +162,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     INITIAL_PROFILES.push(newGuru);
-    showSuccessToast(`Akun Guru ${fullName} berhasil dibuat (Username: ${cleanUsername}).`);
-    return true;
+    showSuccessToast(`Akun Guru ${fullName} berhasil dibuat.`);
+    return { success: true, password: autoPassword, profile: newGuru };
   };
 
   const updateProfile = async (updatedData: Partial<Profile>): Promise<boolean> => {

@@ -17,6 +17,7 @@ export interface Profile {
   role: UserRole;
   nipNuptk?: string;
   phone?: string;
+  password?: string;
   avatarUrl?: string;
   avatarDriveId?: string;
   createdAt: string;
