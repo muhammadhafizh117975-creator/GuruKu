@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Modal } from '../../components/common/Modal';
-import { School, ArrowRight, ShieldCheck, UserCheck, Sun, Moon, AtSign, Mail, Lock, ShieldAlert } from 'lucide-react';
+import { School, ArrowRight, Sun, Moon, AtSign, Lock, ShieldAlert, UserCheck } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
-  const [roleMode, setRoleMode] = useState<'guru' | 'admin'>('guru');
-  const [identifier, setIdentifier] = useState<string>('siti_rahma');
-  const [password, setPassword] = useState<string>('guru123');
+  const [username, setUsername] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
   const [rememberMe, setRememberMe] = useState<boolean>(true);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [forgotModalOpen, setForgotModalOpen] = useState<boolean>(false);
@@ -36,36 +35,9 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleRoleChange = (mode: 'guru' | 'admin') => {
-    setRoleMode(mode);
-    if (mode === 'guru') {
-      setIdentifier('siti_rahma');
-      setPassword('guru123');
-    } else {
-      setIdentifier('admin@guruku.sch.id');
-      setPassword('admin123');
-    }
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    login(identifier, password);
-  };
-
-  const fillQuickAccount = (userType: 'siti' | 'budi' | 'admin') => {
-    if (userType === 'siti') {
-      setRoleMode('guru');
-      setIdentifier('siti_rahma');
-      setPassword('guru123');
-    } else if (userType === 'budi') {
-      setRoleMode('guru');
-      setIdentifier('budi_santoso');
-      setPassword('guru123');
-    } else {
-      setRoleMode('admin');
-      setIdentifier('admin@guruku.sch.id');
-      setPassword('admin123');
-    }
+    login(username, password);
   };
 
   return (
@@ -95,86 +67,35 @@ export const LoginPage: React.FC = () => {
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Sistem Manajemen Sekolah & Portal Akademik Terpadu</p>
         </div>
 
-        {/* Role Mode Selector Tabs */}
-        <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl flex border border-slate-200/60 dark:border-slate-700/60">
-          <button
-            type="button"
-            onClick={() => handleRoleChange('guru')}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-              roleMode === 'guru'
-                ? 'bg-[#696cff] text-white shadow-md shadow-[#696cff]/20'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <UserCheck className="w-3.5 h-3.5" />
-            <span>Guru (Username)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleRoleChange('admin')}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-              roleMode === 'admin'
-                ? 'bg-[#696cff] text-white shadow-md shadow-[#696cff]/20'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Administrator</span>
-          </button>
-        </div>
-
-        {/* Quick Demo Credentials helper */}
-        <div className="p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/50 rounded-2xl space-y-2">
-          <p className="text-[10px] uppercase font-black text-slate-400 dark:text-slate-500 text-center">Isi Otomatis Kredensial Demo:</p>
-          <div className="grid grid-cols-3 gap-1.5">
-            <button
-              type="button"
-              onClick={() => fillQuickAccount('siti')}
-              className="py-1.5 px-2 rounded-xl text-[11px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-[#696cff] hover:text-white dark:hover:bg-[#696cff] transition-colors text-center truncate"
-            >
-              Guru Siti
-            </button>
-            <button
-              type="button"
-              onClick={() => fillQuickAccount('budi')}
-              className="py-1.5 px-2 rounded-xl text-[11px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-[#696cff] hover:text-white dark:hover:bg-[#696cff] transition-colors text-center truncate"
-            >
-              Guru Budi
-            </button>
-            <button
-              type="button"
-              onClick={() => fillQuickAccount('admin')}
-              className="py-1.5 px-2 rounded-xl text-[11px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-[#696cff] hover:text-white dark:hover:bg-[#696cff] transition-colors text-center truncate"
-            >
-              Admin
-            </button>
-          </div>
+        {/* Portal Notice */}
+        <div className="p-3 bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl text-center">
+          <p className="text-xs font-bold text-indigo-900 dark:text-indigo-200 flex items-center justify-center gap-1.5">
+            <UserCheck className="w-4 h-4 text-[#696cff]" />
+            <span>Login Menggunakan Username Akun</span>
+          </p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+            Admin & Guru dapat masuk menggunakan Username dan Kata Sandi resmi.
+          </p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-              {roleMode === 'guru' ? 'Username Guru' : 'Email / Username Admin'}
+              Username Akun
             </label>
             <div className="relative">
-              {roleMode === 'guru' ? (
-                <AtSign className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-              ) : (
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-              )}
+              <AtSign className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
               <input
                 type="text"
                 required
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                placeholder={roleMode === 'guru' ? 'contoh: siti_rahma' : 'admin@guruku.sch.id'}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Masukkan Username Anda..."
                 className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-[#696cff]"
               />
             </div>
-            {roleMode === 'guru' && (
-              <p className="text-[10px] text-slate-400 mt-1">Gunakan Username yang diberikan oleh Admin Sekolah.</p>
-            )}
+            <p className="text-[10px] text-slate-400 mt-1">Gunakan Username resmi akun Admin atau Guru Anda.</p>
           </div>
 
           <div>

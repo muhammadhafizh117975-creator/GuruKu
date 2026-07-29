@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
+  AcademicYearItem,
   Profile,
   Subject,
   ClassRoom,
@@ -46,143 +47,33 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
 };
 
 // Initial Mock Seed Data
+export const INITIAL_ACADEMIC_YEARS: AcademicYearItem[] = [
+  { id: 'ay_2025_2026_1', year: '2025/2026', semester: '1', isActive: true, status: 'Aktif', createdAt: new Date().toISOString() }
+];
+
 export const INITIAL_PROFILES: Profile[] = [
   {
     id: 'user_admin_01',
     email: 'admin@guruku.sch.id',
     username: 'admin',
-    fullName: 'Dr. Ahmad Sanusi, M.Pd.',
+    fullName: 'Administrator Sekolah',
     role: 'admin',
-    nipNuptk: '19780312 200212 1 002',
+    nipNuptk: '19800101 200501 1 001',
     phone: '081234567890',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'user_guru_01',
-    email: 'guru.matematika@guruku.sch.id',
-    username: 'siti_rahma',
-    fullName: 'Siti Rahmawati, S.Pd.',
-    role: 'guru',
-    nipNuptk: '19850614 201001 2 015',
-    phone: '081987654321',
-    avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'user_guru_02',
-    email: 'guru.ipa@guruku.sch.id',
-    username: 'budi_santoso',
-    fullName: 'Budi Santoso, M.Si.',
-    role: 'guru',
-    nipNuptk: '19821105 200804 1 008',
-    phone: '081311223344',
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
   }
 ];
 
-export const INITIAL_SUBJECTS: Subject[] = [
-  { id: 'subj_01', code: 'MTK-01', name: 'Matematika Terapan', description: 'Aljabar, Geometri, dan Statistika', teacherIds: ['user_guru_01'], createdAt: '2026-01-10' },
-  { id: 'subj_02', code: 'IPA-01', name: 'Ilmu Pengetahuan Alam (Fisika & Biologi)', description: 'Konsep Alam dan Ekosistem', teacherIds: ['user_guru_02'], createdAt: '2026-01-10' },
-  { id: 'subj_03', code: 'BIN-01', name: 'Bahasa Indonesia', description: 'Literasi dan Penulisan Karya Ilmiah', teacherIds: ['user_guru_01'], createdAt: '2026-01-10' },
-  { id: 'subj_04', code: 'ING-01', name: 'Bahasa Inggris', description: 'Grammar and Conversational English', teacherIds: ['user_guru_02'], createdAt: '2026-01-10' }
-];
-
-export const INITIAL_CLASSES: ClassRoom[] = [
-  { id: 'class_01', name: '7-A', gradeLevel: '7', academicYear: '2025/2026', homeroomTeacherId: 'user_guru_01', createdAt: '2026-01-10' },
-  { id: 'class_02', name: '7-B', gradeLevel: '7', academicYear: '2025/2026', homeroomTeacherId: 'user_guru_02', createdAt: '2026-01-10' },
-  { id: 'class_03', name: '8-A', gradeLevel: '8', academicYear: '2025/2026', homeroomTeacherId: 'user_guru_01', createdAt: '2026-01-10' }
-];
-
-export const INITIAL_STUDENTS: Student[] = [
-  { id: 'std_01', nis: '2026001', fullName: 'Aditya Pratama', gender: 'L', birthPlace: 'Jakarta', birthDate: '2012-05-14', address: 'Jl. Merdeka No. 12, Jakarta', parentPhone: '081233445566', classId: 'class_01', className: '7-A', createdAt: '2026-01-10' },
-  { id: 'std_02', nis: '2026002', fullName: 'Annisa Tri Hapsari', gender: 'P', birthPlace: 'Bandung', birthDate: '2012-08-20', address: 'Jl. Melati No. 45, Jakarta', parentPhone: '081277889900', classId: 'class_01', className: '7-A', createdAt: '2026-01-10' },
-  { id: 'std_03', nis: '2026003', fullName: 'Bayu Wijaya', gender: 'L', birthPlace: 'Bogor', birthDate: '2012-01-30', address: 'Jl. Pajajaran No. 8, Jakarta', parentPhone: '081399887766', classId: 'class_01', className: '7-A', createdAt: '2026-01-10' },
-  { id: 'std_04', nis: '2026004', fullName: 'Clarissa Putri', gender: 'P', birthPlace: 'Surabaya', birthDate: '2012-11-12', address: 'Jl. Kenanga No. 3, Jakarta', parentPhone: '081566778899', classId: 'class_02', className: '7-B', createdAt: '2026-01-10' },
-  { id: 'std_05', nis: '2026005', fullName: 'Daffa Rizky', gender: 'L', birthPlace: 'Depok', birthDate: '2012-04-05', address: 'Jl. Margonda No. 101, Depok', parentPhone: '081822334455', classId: 'class_02', className: '7-B', createdAt: '2026-01-10' }
-];
-
-export const INITIAL_GRADES: Grade[] = [
-  { id: 'grd_01', studentId: 'std_01', studentName: 'Aditya Pratama', studentNis: '2026001', subjectId: 'subj_01', subjectName: 'Matematika Terapan', classId: 'class_01', className: '7-A', teacherId: 'user_guru_01', assignmentScore: 85, dailyScore: 88, ptsScore: 90, pasScore: 92, finalScore: 89, predicate: 'A', notes: 'Sangat menguasai konsep aljabar', academicYear: '2025/2026', semester: '1', updatedAt: '2026-07-20' },
-  { id: 'grd_02', studentId: 'std_02', studentName: 'Annisa Tri Hapsari', studentNis: '2026002', subjectId: 'subj_01', subjectName: 'Matematika Terapan', classId: 'class_01', className: '7-A', teacherId: 'user_guru_01', assignmentScore: 80, dailyScore: 82, ptsScore: 85, pasScore: 84, finalScore: 83, predicate: 'B', notes: 'Aktif dan dapat meningkatkan logika numerik', academicYear: '2025/2026', semester: '1', updatedAt: '2026-07-20' },
-  { id: 'grd_03', studentId: 'std_03', studentName: 'Bayu Wijaya', studentNis: '2026003', subjectId: 'subj_01', subjectName: 'Matematika Terapan', classId: 'class_01', className: '7-A', teacherId: 'user_guru_01', assignmentScore: 75, dailyScore: 78, ptsScore: 70, pasScore: 76, finalScore: 75, predicate: 'C', notes: 'Perlu latihan ekstra soal cerita', academicYear: '2025/2026', semester: '1', updatedAt: '2026-07-20' }
-];
-
-export const INITIAL_ATTENDANCE: Attendance[] = [
-  { id: 'att_01', date: '2026-07-24', studentId: 'std_01', studentName: 'Aditya Pratama', studentNis: '2026001', classId: 'class_01', subjectId: 'subj_01', teacherId: 'user_guru_01', status: 'Hadir', notes: '', createdAt: '2026-07-24T08:00:00' },
-  { id: 'att_02', date: '2026-07-24', studentId: 'std_02', studentName: 'Annisa Tri Hapsari', studentNis: '2026002', classId: 'class_01', subjectId: 'subj_01', teacherId: 'user_guru_01', status: 'Hadir', notes: '', createdAt: '2026-07-24T08:00:00' },
-  { id: 'att_03', date: '2026-07-24', studentId: 'std_03', studentName: 'Bayu Wijaya', studentNis: '2026003', classId: 'class_01', subjectId: 'subj_01', teacherId: 'user_guru_01', status: 'Izin', notes: 'Acara keluarga dengan surat ortu', createdAt: '2026-07-24T08:00:00' }
-];
-
-export const INITIAL_JOURNALS: TeachingJournal[] = [
-  {
-    id: 'jrn_01',
-    date: '2026-07-24',
-    subjectId: 'subj_01',
-    subjectName: 'Matematika Terapan',
-    classId: 'class_01',
-    className: '7-A',
-    teacherId: 'user_guru_01',
-    teacherName: 'Siti Rahmawati, S.Pd.',
-    timeSlot: '07:30 - 09:00 (Jam 1-2)',
-    topic: 'Persamaan Linear Satu Variabel',
-    method: 'Problem Based Learning (PBL)',
-    attendeeCount: 31,
-    notes: 'Siswa antusias mengerjakan kuis kelompok di papan tulis.',
-    attachmentName: 'Dokumentasi_Kuis_7A.pdf',
-    attachmentDriveId: 'gdrive_jrn_102',
-    attachmentWebViewLink: 'https://drive.google.com',
-    attachmentWebContentLink: 'https://drive.google.com',
-    createdAt: '2026-07-24T09:15:00'
-  }
-];
-
-export const INITIAL_MODULES: TeachingModule[] = [
-  {
-    id: 'mod_01',
-    title: 'Modul Ajar Matematika Kurikulum Merdeka - Bab 1 Persamaan Linear',
-    subjectId: 'subj_01',
-    subjectName: 'Matematika Terapan',
-    classLevel: '7',
-    semester: '1',
-    academicYear: '2025/2026',
-    description: 'Modul Ajar lengkap dengan LKPD, Asesmen Diagnostik & Formatif',
-    fileType: 'pdf',
-    fileName: 'Modul_Ajar_MTK_Kelas7_Bab1.pdf',
-    fileSize: '2.4 MB',
-    fileDriveId: 'gdrive_mod_771',
-    webViewLink: 'https://drive.google.com',
-    webContentLink: 'https://drive.google.com',
-    teacherId: 'user_guru_01',
-    teacherName: 'Siti Rahmawati, S.Pd.',
-    createdAt: '2026-07-15T10:00:00'
-  }
-];
-
-export const INITIAL_ACTIVITY_LOGS: ActivityLog[] = [
-  {
-    id: 'act_01',
-    userId: 'user_admin_01',
-    userName: 'Dr. Ahmad Sanusi, M.Pd.',
-    userRole: 'admin',
-    action: 'SYSTEM_BOOT',
-    details: 'Aplikasi GuruKu berhasil diinisialisasi.',
-    timestamp: new Date().toISOString()
-  },
-  {
-    id: 'act_02',
-    userId: 'user_guru_01',
-    userName: 'Siti Rahmawati, S.Pd.',
-    userRole: 'guru',
-    action: 'INPUT_NILAI',
-    details: 'Menginput nilai Tugas & PTS Matematika Kelas 7-A',
-    timestamp: new Date(Date.now() - 3600000).toISOString()
-  }
-];
+export const INITIAL_SUBJECTS: Subject[] = [];
+export const INITIAL_CLASSES: ClassRoom[] = [];
+export const INITIAL_STUDENTS: Student[] = [];
+export const INITIAL_GRADES: Grade[] = [];
+export const INITIAL_ATTENDANCE: Attendance[] = [];
+export const INITIAL_JOURNALS: TeachingJournal[] = [];
+export const INITIAL_MODULES: TeachingModule[] = [];
+export const INITIAL_ACTIVITY_LOGS: ActivityLog[] = [];
 
 export const INITIAL_SYSTEM_SETTINGS: SystemSettings = {
   paperMargin: {

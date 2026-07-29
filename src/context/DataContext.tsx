@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
+  AcademicYearItem,
   Profile,
   Subject,
   ClassRoom,
@@ -12,6 +13,7 @@ import {
   ActivityLog
 } from '../types';
 import {
+  INITIAL_ACADEMIC_YEARS,
   INITIAL_PROFILES,
   INITIAL_SUBJECTS,
   INITIAL_CLASSES,
@@ -28,6 +30,8 @@ import { showSuccessToast, showErrorToast } from '../components/common/SweetAler
 import { useAuth } from './AuthContext';
 
 interface DataContextType {
+  academicYears: AcademicYearItem[];
+  activeAcademicYear: AcademicYearItem;
   teachers: Profile[];
   subjects: Subject[];
   classes: ClassRoom[];
@@ -41,6 +45,11 @@ interface DataContextType {
   isRealtimeConnected: boolean;
 
   // Actions
+  addAcademicYear: (ay: Omit<AcademicYearItem, 'id' | 'createdAt'>) => void;
+  updateAcademicYear: (id: string, ay: Partial<AcademicYearItem>) => void;
+  setActiveAcademicYear: (id: string) => void;
+  deleteAcademicYear: (id: string) => void;
+
   addSubject: (subj: Omit<Subject, 'id' | 'createdAt'>) => void;
   updateSubject: (id: string, subj: Partial<Subject>) => void;
   deleteSubject: (id: string) => void;
@@ -50,6 +59,7 @@ interface DataContextType {
   deleteClass: (id: string) => void;
 
   addStudent: (std: Omit<Student, 'id' | 'createdAt'>) => void;
+  bulkAddStudents: (stds: Omit<Student, 'id' | 'createdAt'>[]) => void;
   updateStudent: (id: string, std: Partial<Student>) => void;
   deleteStudent: (id: string) => void;
 
@@ -66,12 +76,27 @@ interface DataContextType {
 
   updateSystemSettings: (settings: Partial<SystemSettings>) => void;
   logActivity: (action: string, details: string) => void;
+  resetAllData: () => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const [academicYears, setAcademicYears] = useState<AcademicYearItem[]>(() => {
+    const saved = localStorage.getItem('guruku_academic_years');
+    return saved ? JSON.parse(saved) : INITIAL_ACADEMIC_YEARS;
+  });
+
+  const activeAcademicYear = academicYears.find((ay) => ay.isActive) || academicYears[0] || {
+    id: 'ay_default',
+    year: '2025/2026',
+    semester: '1',
+    isActive: true,
+    status: 'Aktif',
+    createdAt: new Date().toISOString()
+  };
+
   const [teachers, setTeachers] = useState<Profile[]>(() => {
     const saved = localStorage.getItem('guruku_teachers');
     return saved ? JSON.parse(saved) : INITIAL_PROFILES.filter((p) => p.role === 'guru');
@@ -125,6 +150,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(false);
 
   // Sync to localStorage
+  useEffect(() => { localStorage.setItem('guruku_academic_years', JSON.stringify(academicYears)); }, [academicYears]);
   useEffect(() => { localStorage.setItem('guruku_teachers', JSON.stringify(teachers)); }, [teachers]);
   useEffect(() => { localStorage.setItem('guruku_subjects', JSON.stringify(subjects)); }, [subjects]);
   useEffect(() => { localStorage.setItem('guruku_classes', JSON.stringify(classes)); }, [classes]);
@@ -182,6 +208,64 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setActivityLogs((prev) => [newLog, ...prev.slice(0, 49)]);
   }, [user]);
 
+  // Academic Year Actions
+  const addAcademicYear = (ay: Omit<AcademicYearItem, 'id' | 'createdAt'>) => {
+    const newAy: AcademicYearItem = {
+      ...ay,
+      id: `ay_${Date.now()}`,
+      createdAt: new Date().toISOString()
+    };
+    if (ay.isActive) {
+      setAcademicYears((prev) =>
+        prev.map((item) => ({ ...item, isActive: false, status: 'Non-Aktif' })).concat(newAy)
+      );
+    } else {
+      setAcademicYears((prev) => [newAy, ...prev]);
+    }
+    logActivity('TAMBAH_TAHUN_AJARAN', `Menambahkan tahun pelajaran ${newAy.year} Semester ${newAy.semester}`);
+    showSuccessToast('Tahun Pelajaran berhasil ditambahkan.');
+  };
+
+  const updateAcademicYear = (id: string, updated: Partial<AcademicYearItem>) => {
+    setAcademicYears((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          const nextIsActive = updated.isActive !== undefined ? updated.isActive : item.isActive;
+          return {
+            ...item,
+            ...updated,
+            status: nextIsActive ? 'Aktif' : 'Non-Aktif'
+          };
+        }
+        if (updated.isActive) {
+          return { ...item, isActive: false, status: 'Non-Aktif' };
+        }
+        return item;
+      })
+    );
+    logActivity('UBAH_TAHUN_AJARAN', `Memperbarui data tahun pelajaran`);
+    showSuccessToast('Tahun Pelajaran berhasil diperbarui.');
+  };
+
+  const setActiveAcademicYear = (id: string) => {
+    setAcademicYears((prev) =>
+      prev.map((item) => ({
+        ...item,
+        isActive: item.id === id,
+        status: item.id === id ? 'Aktif' : 'Non-Aktif'
+      }))
+    );
+    const selected = academicYears.find((ay) => ay.id === id);
+    logActivity('AKTIFKAN_TAHUN_AJARAN', `Mengaktifkan tahun pelajaran ${selected?.year || id}`);
+    showSuccessToast(`Tahun Pelajaran ${selected?.year} Semester ${selected?.semester} diaktifkan sebagai default.`);
+  };
+
+  const deleteAcademicYear = (id: string) => {
+    setAcademicYears((prev) => prev.filter((item) => item.id !== id));
+    logActivity('HAPUS_TAHUN_AJARAN', `Menghapus tahun pelajaran`);
+    showSuccessToast('Tahun Pelajaran berhasil dihapus.');
+  };
+
   // Actions
   const addSubject = (subj: Omit<Subject, 'id' | 'createdAt'>) => {
     const newSubj: Subject = {
@@ -233,13 +317,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cls = classes.find((c) => c.id === std.classId);
     const newStd: Student = {
       ...std,
-      className: cls?.name || '',
+      className: cls?.name || std.className || '',
       id: `std_${Date.now()}`,
       createdAt: new Date().toISOString()
     };
     setStudents((prev) => [newStd, ...prev]);
     logActivity('TAMBAH_SISWA', `Menambahkan siswa ${newStd.fullName}`);
     showSuccessToast('Siswa berhasil ditambahkan.');
+  };
+
+  const bulkAddStudents = (stdsList: Omit<Student, 'id' | 'createdAt'>[]) => {
+    const now = new Date().toISOString();
+    const newStudents: Student[] = stdsList.map((std, idx) => {
+      const cls = classes.find((c) => c.id === std.classId || c.name.toLowerCase() === (std.className || '').toLowerCase());
+      return {
+        ...std,
+        classId: cls?.id || std.classId || '',
+        className: cls?.name || std.className || 'Belum Ada Kelas',
+        id: `std_bulk_${Date.now()}_${idx}`,
+        createdAt: now
+      };
+    });
+
+    setStudents((prev) => [...newStudents, ...prev]);
+    logActivity('BULK_UPLOAD_SISWA', `Berhasil mengunggah ${newStudents.length} data siswa baru`);
+    showSuccessToast(`Berhasil mengimpor ${newStudents.length} data siswa baru.`);
   };
 
   const updateStudent = (id: string, updated: Partial<Student>) => {
@@ -393,9 +495,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     showSuccessToast('Pengaturan sistem berhasil diperbarui.');
   };
 
+  const resetAllData = () => {
+    localStorage.removeItem('guruku_teachers');
+    localStorage.removeItem('guruku_subjects');
+    localStorage.removeItem('guruku_classes');
+    localStorage.removeItem('guruku_students');
+    localStorage.removeItem('guruku_grades');
+    localStorage.removeItem('guruku_attendance');
+    localStorage.removeItem('guruku_journals');
+    localStorage.removeItem('guruku_modules');
+    localStorage.removeItem('guruku_logs');
+
+    setTeachers([]);
+    setSubjects([]);
+    setClasses([]);
+    setStudents([]);
+    setGrades([]);
+    setAttendance([]);
+    setJournals([]);
+    setModules([]);
+    setActivityLogs([]);
+
+    logActivity('RESET_DATA', 'Mereset seluruh data aplikasi ke kondisi awal (kosong)');
+    showSuccessToast('Seluruh data aplikasi berhasil dibersihkan ke kondisi awal (kosong).');
+  };
+
   return (
     <DataContext.Provider
       value={{
+        academicYears,
+        activeAcademicYear,
         teachers,
         subjects,
         classes,
@@ -407,6 +536,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         systemSettings,
         activityLogs,
         isRealtimeConnected,
+        addAcademicYear,
+        updateAcademicYear,
+        setActiveAcademicYear,
+        deleteAcademicYear,
         addSubject,
         updateSubject,
         deleteSubject,
@@ -414,6 +547,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateClass,
         deleteClass,
         addStudent,
+        bulkAddStudents,
         updateStudent,
         deleteStudent,
         saveGrade,
@@ -424,7 +558,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addModule,
         deleteModule,
         updateSystemSettings,
-        logActivity
+        logActivity,
+        resetAllData
       }}
     >
       {children}

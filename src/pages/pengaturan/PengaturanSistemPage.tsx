@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
+import { AcademicYearItem } from '../../types';
 import { GoogleDriveService } from '../../services/googleDrive';
 import { generateSupabaseSQLScript, resetSupabaseClient } from '../../services/supabase';
 import { KopSuratPreview } from '../../components/common/KopSuratPreview';
-import { showSuccessToast } from '../../components/common/SweetAlert';
+import { Modal } from '../../components/common/Modal';
+import { showConfirmModal, showSuccessToast } from '../../components/common/SweetAlert';
 import {
   Settings,
   Upload,
@@ -13,14 +15,38 @@ import {
   Check,
   ShieldAlert,
   HardDrive,
-  FileText
+  FileText,
+  Calendar,
+  Plus,
+  CheckCircle2,
+  Edit2,
+  Trash2,
+  Award,
+  RotateCcw
 } from 'lucide-react';
 
 export const PengaturanSistemPage: React.FC = () => {
   const { user } = useAuth();
-  const { systemSettings, updateSystemSettings } = useData();
+  const {
+    systemSettings,
+    updateSystemSettings,
+    academicYears,
+    activeAcademicYear,
+    addAcademicYear,
+    updateAcademicYear,
+    setActiveAcademicYear,
+    deleteAcademicYear,
+    resetAllData
+  } = useData();
 
-  const [activeTab, setActiveTab] = useState<'margin_kop' | 'supabase_sql'>('margin_kop');
+  const [activeTab, setActiveTab] = useState<'margin_kop' | 'tahun_pelajaran' | 'supabase_sql' | 'reset_data'>('tahun_pelajaran');
+
+  // Academic Year Modal State
+  const [isAyModalOpen, setIsAyModalOpen] = useState<boolean>(false);
+  const [editingAy, setEditingAy] = useState<AcademicYearItem | null>(null);
+  const [ayYear, setAyYear] = useState<string>('2026/2027');
+  const [aySemester, setAySemester] = useState<'1' | '2'>('1');
+  const [ayIsActive, setAyIsActive] = useState<boolean>(false);
 
   // Margin State
   const [unit, setUnit] = useState<'mm' | 'cm'>(systemSettings.paperMargin.unit);
@@ -52,6 +78,52 @@ export const PengaturanSistemPage: React.FC = () => {
       </div>
     );
   }
+
+  const openCreateAyModal = () => {
+    setEditingAy(null);
+    setAyYear('2026/2027');
+    setAySemester('1');
+    setAyIsActive(false);
+    setIsAyModalOpen(true);
+  };
+
+  const openEditAyModal = (ay: AcademicYearItem) => {
+    setEditingAy(ay);
+    setAyYear(ay.year);
+    setAySemester(ay.semester);
+    setAyIsActive(ay.isActive);
+    setIsAyModalOpen(true);
+  };
+
+  const handleAySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingAy) {
+      updateAcademicYear(editingAy.id, {
+        year: ayYear,
+        semester: aySemester,
+        isActive: ayIsActive
+      });
+    } else {
+      addAcademicYear({
+        year: ayYear,
+        semester: aySemester,
+        isActive: ayIsActive,
+        status: ayIsActive ? 'Aktif' : 'Non-Aktif'
+      });
+    }
+    setIsAyModalOpen(false);
+  };
+
+  const handleDeleteAy = async (id: string, name: string) => {
+    const confirm = await showConfirmModal(
+      'Hapus Tahun Pelajaran',
+      `Apakah Anda yakin ingin menghapus data Tahun Pelajaran ${name}?`,
+      'Ya, Hapus'
+    );
+    if (confirm) {
+      deleteAcademicYear(id);
+    }
+  };
 
   const handleSaveMarginKop = (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,6 +157,17 @@ export const PengaturanSistemPage: React.FC = () => {
     showSuccessToast('Konfigurasi Supabase berhasil diperbarui.');
   };
 
+  const handleResetDataClick = async () => {
+    const confirm = await showConfirmModal(
+      'Reset Seluruh Data Aplikasi',
+      'Apakah Anda yakin ingin menghapus SELURUH data aplikasi (Mata Pelajaran, Kelas, Siswa, Nilai, Absensi, Jurnal, dan Modul) sehingga aplikasi bersih tanpa data contoh?',
+      'Ya, Reset Semua Data'
+    );
+    if (confirm) {
+      resetAllData();
+    }
+  };
+
   const sqlScript = generateSupabaseSQLScript();
 
   const handleCopySql = () => {
@@ -112,37 +195,225 @@ export const PengaturanSistemPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
         <div>
           <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            <Settings className="w-6 h-6 text-[#696cff]" /> Pengaturan Sistem (Khusus Admin)
+            <Settings className="w-6 h-6 text-[#696cff]" /> Pengaturan Sistem & Akademik (Admin)
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">Atur margin cetak PDF, gambar Kop Surat, dan koneksi Supabase & Google Drive</p>
+          <p className="text-xs text-slate-400 mt-0.5">Atur Tahun Pelajaran aktif, margin cetak PDF, gambar Kop Surat, dan database Supabase</p>
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl">
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl flex-wrap">
+          <button
+            onClick={() => setActiveTab('tahun_pelajaran')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeTab === 'tahun_pelajaran'
+                ? 'bg-[#696cff] text-white shadow-xs'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5" /> Tahun Pelajaran
+          </button>
           <button
             onClick={() => setActiveTab('margin_kop')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeTab === 'margin_kop'
                 ? 'bg-[#696cff] text-white shadow-xs'
                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            Margin & Kop Surat
+            <FileText className="w-3.5 h-3.5" /> Margin & Kop Surat
           </button>
           <button
             onClick={() => setActiveTab('supabase_sql')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeTab === 'supabase_sql'
                 ? 'bg-[#696cff] text-white shadow-xs'
                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            Supabase SQL & aaPanel VPS
+            <Database className="w-3.5 h-3.5" /> Supabase & VPS
+          </button>
+          <button
+            onClick={() => setActiveTab('reset_data')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeTab === 'reset_data'
+                ? 'bg-rose-500 text-white shadow-xs'
+                : 'text-slate-500 hover:text-rose-600 dark:hover:text-rose-400'
+            }`}
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Reset Data Aplikasi
           </button>
         </div>
       </div>
 
-      {activeTab === 'margin_kop' ? (
+      {activeTab === 'tahun_pelajaran' && (
+        <div className="space-y-6">
+          {/* Active Academic Year Highlight Card */}
+          <div className="bg-gradient-to-r from-[#696cff] to-indigo-700 p-6 rounded-3xl text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-white font-extrabold text-xs backdrop-blur-xs uppercase tracking-wide">
+                <Award className="w-3.5 h-3.5" /> Tahun Pelajaran Aktif (Default Aplikasi)
+              </span>
+              <h3 className="text-2xl font-black tracking-tight">
+                Tahun Ajaran {activeAcademicYear.year} — Semester {activeAcademicYear.semester} ({activeAcademicYear.semester === '1' ? 'Ganjil' : 'Genap'})
+              </h3>
+              <p className="text-xs text-indigo-100 max-w-2xl">
+                Tahun pelajaran ini secara otomatis diterapkan sebagai standar pada pembuatan Rombongan Belajar, Penilaian Siswa, Absensi Harian, Jurnal Mengajar Guru, dan Modul Ajar.
+              </p>
+            </div>
+            <button
+              onClick={openCreateAyModal}
+              className="px-5 py-3 rounded-2xl bg-white text-[#696cff] hover:bg-slate-50 font-black text-xs shadow-lg transition-all flex items-center gap-2 shrink-0 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Tambah Tahun Pelajaran
+            </button>
+          </div>
+
+          {/* Academic Years Table */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-xs">
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-base text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-[#696cff]" /> Daftar Tahun Pelajaran Sekolah
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">Kelola status aktif dan buat periode akademik baru</p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-sm">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-800/50 text-slate-400 uppercase text-[10px] font-black tracking-wider border-b border-slate-100 dark:border-slate-800">
+                    <th className="py-3.5 px-6">Tahun Pelajaran</th>
+                    <th className="py-3.5 px-6">Semester</th>
+                    <th className="py-3.5 px-6">Status Sistem</th>
+                    <th className="py-3.5 px-6">Tanggal Buat</th>
+                    <th className="py-3.5 px-6 text-right">Aksi Manajemen</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
+                  {academicYears.map((ay) => (
+                    <tr key={ay.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="py-4 px-6 font-extrabold text-slate-800 dark:text-slate-100">
+                        {ay.year}
+                      </td>
+                      <td className="py-4 px-6 text-slate-600 dark:text-slate-300">
+                        Semester {ay.semester} ({ay.semester === '1' ? 'Ganjil' : 'Genap'})
+                      </td>
+                      <td className="py-4 px-6">
+                        {ay.isActive ? (
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-500/20">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Aktif (Default)
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 text-xs font-bold">
+                            Non-Aktif
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-4 px-6 text-xs text-slate-400">
+                        {ay.createdAt ? ay.createdAt.split('T')[0] : '-'}
+                      </td>
+                      <td className="py-4 px-6 text-right space-x-2">
+                        {!ay.isActive && (
+                          <button
+                            onClick={() => setActiveAcademicYear(ay.id)}
+                            className="px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Set Aktif
+                          </button>
+                        )}
+                        <button
+                          onClick={() => openEditAyModal(ay)}
+                          className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-[#696cff]/10 text-slate-700 dark:text-slate-200 hover:text-[#696cff] text-xs font-bold transition-colors cursor-pointer inline-flex items-center gap-1"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" /> Edit
+                        </button>
+                        {!ay.isActive && (
+                          <button
+                            onClick={() => handleDeleteAy(ay.id, `${ay.year} Sem ${ay.semester}`)}
+                            className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-rose-500/10 text-slate-700 dark:text-slate-200 hover:text-rose-500 text-xs font-bold transition-colors cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Hapus
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Modal CRUD Academic Year */}
+          <Modal
+            isOpen={isAyModalOpen}
+            onClose={() => setIsAyModalOpen(false)}
+            title={editingAy ? 'Edit Tahun Pelajaran' : 'Tambah Tahun Pelajaran Baru'}
+          >
+            <form onSubmit={handleAySubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Tahun Pelajaran (Format: YYYY/YYYY) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={ayYear}
+                  onChange={(e) => setAyYear(e.target.value)}
+                  placeholder="Contoh: 2026/2027"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold focus:ring-2 focus:ring-[#696cff]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Semester *
+                </label>
+                <select
+                  value={aySemester}
+                  onChange={(e) => setAySemester(e.target.value as '1' | '2')}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold focus:ring-2 focus:ring-[#696cff]"
+                >
+                  <option value="1">Semester 1 (Ganjil)</option>
+                  <option value="2">Semester 2 (Genap)</option>
+                </select>
+              </div>
+
+              <div className="pt-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={ayIsActive}
+                    onChange={(e) => setAyIsActive(e.target.checked)}
+                    className="rounded text-[#696cff] focus:ring-[#696cff]"
+                  />
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                    Aktifkan Langsung Sebagai Default Aplikasi
+                  </span>
+                </label>
+              </div>
+
+              <div className="pt-4 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAyModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-[#696cff] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 hover:bg-[#5f61e6]"
+                >
+                  Simpan Tahun Pelajaran
+                </button>
+              </div>
+            </form>
+          </Modal>
+        </div>
+      )}
+
+      {activeTab === 'margin_kop' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Controls Form */}
           <div className="lg:col-span-7 bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
@@ -282,8 +553,9 @@ export const PengaturanSistemPage: React.FC = () => {
             <KopSuratPreview settings={currentPreviewSettings} />
           </div>
         </div>
-      ) : (
-        /* SUPABASE & AAPANEL TAB */
+      )}
+
+      {activeTab === 'supabase_sql' && (
         <div className="space-y-6">
           <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
             <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
@@ -348,6 +620,37 @@ export const PengaturanSistemPage: React.FC = () => {
                 {sqlScript}
               </pre>
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'reset_data' && (
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6 animate-fade-in">
+          <div className="flex items-start gap-4">
+            <div className="p-4 bg-rose-500/10 text-rose-500 rounded-2xl shrink-0">
+              <RotateCcw className="w-8 h-8" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                Reset Seluruh Data Aplikasi ke Kondisi Awal (Kosong)
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-2xl">
+                Fitur ini digunakan untuk membersihkan seluruh data aplikasi (Mata Pelajaran, Rombongan Belajar, Data Siswa, Nilai, Absensi Harian, Jurnal Mengajar, dan Modul Ajar) sehingga aplikasi siap digunakan secara resmi dari nol tanpa data contoh/dummy.
+              </p>
+            </div>
+          </div>
+
+          <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 rounded-2xl text-xs text-rose-800 dark:text-rose-300 font-medium leading-relaxed">
+            <strong>Peringatan Penting:</strong> Tindakan reset data bersifat permanen dan akan menghapus seluruh entri dummy yang pernah tersimpan. Akun Administrator Anda akan tetap aktif untuk mengelola aplikasi.
+          </div>
+
+          <div>
+            <button
+              onClick={handleResetDataClick}
+              className="px-6 py-3.5 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-extrabold text-xs shadow-lg shadow-rose-500/30 transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <Trash2 className="w-4 h-4" /> Reset Seluruh Data Aplikasi Sekarang
+            </button>
           </div>
         </div>
       )}

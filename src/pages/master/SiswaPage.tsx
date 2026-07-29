@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { Student } from '../../types';
 import { Modal } from '../../components/common/Modal';
-import { showConfirmModal } from '../../components/common/SweetAlert';
+import { showConfirmModal, showSuccessToast, showErrorToast } from '../../components/common/SweetAlert';
 import {
   GraduationCap,
   Plus,
@@ -11,18 +12,27 @@ import {
   Trash2,
   Phone,
   MapPin,
-  Calendar
+  Calendar,
+  Upload,
+  FileSpreadsheet,
+  Info,
+  CheckCircle2,
+  Users
 } from 'lucide-react';
 
 export const SiswaPage: React.FC = () => {
-  const { students, classes, addStudent, updateStudent, deleteStudent } = useData();
+  const { user } = useAuth();
+  const { students, classes, addStudent, bulkAddStudents, updateStudent, deleteStudent } = useData();
+
+  const isAdmin = user?.role === 'admin';
 
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState<boolean>(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
 
-  // Form State
+  // Single Form State
   const [nis, setNis] = useState<string>('');
   const [fullName, setFullName] = useState<string>('');
   const [gender, setGender] = useState<'L' | 'P'>('L');
@@ -31,6 +41,11 @@ export const SiswaPage: React.FC = () => {
   const [address, setAddress] = useState<string>('');
   const [parentPhone, setParentPhone] = useState<string>('');
   const [classId, setClassId] = useState<string>('');
+
+  // Bulk Upload State
+  const [rawText, setRawText] = useState<string>('');
+  const [bulkClassId, setBulkClassId] = useState<string>('');
+  const [parsedPreview, setParsedPreview] = useState<Omit<Student, 'id' | 'createdAt'>[]>([]);
 
   const openCreateModal = () => {
     setEditingStudent(null);
@@ -56,6 +71,13 @@ export const SiswaPage: React.FC = () => {
     setParentPhone(std.parentPhone);
     setClassId(std.classId);
     setIsModalOpen(true);
+  };
+
+  const openBulkModal = () => {
+    setRawText('');
+    setParsedPreview([]);
+    setBulkClassId(classes[0]?.id || '');
+    setIsBulkModalOpen(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -88,6 +110,73 @@ export const SiswaPage: React.FC = () => {
     setIsModalOpen(false);
   };
 
+  const parseRawTextData = () => {
+    if (!rawText.trim()) {
+      showErrorToast('Silakan tempel (paste) atau ketik data siswa terlebih dahulu.');
+      return;
+    }
+
+    const lines = rawText.split('\n').filter((l) => l.trim() !== '');
+    const selectedClass = classes.find((c) => c.id === bulkClassId);
+    const parsed: Omit<Student, 'id' | 'createdAt'>[] = [];
+
+    lines.forEach((line, idx) => {
+      // Split by tab or comma
+      const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+      if (parts.length >= 2) {
+        const cleanNis = parts[0]?.trim() || `2026${100 + idx}`;
+        const cleanName = parts[1]?.trim() || '';
+        const cleanGender = (parts[2]?.trim().toUpperCase() === 'P' ? 'P' : 'L') as 'L' | 'P';
+        const cleanPlace = parts[3]?.trim() || 'Jakarta';
+        const cleanDate = parts[4]?.trim() || '2012-01-01';
+        const cleanAddress = parts[5]?.trim() || 'Alamat Belum Diisi';
+        const cleanPhone = parts[6]?.trim() || '081200000000';
+
+        if (cleanName) {
+          parsed.push({
+            nis: cleanNis,
+            fullName: cleanName,
+            gender: cleanGender,
+            birthPlace: cleanPlace,
+            birthDate: cleanDate,
+            address: cleanAddress,
+            parentPhone: cleanPhone,
+            classId: bulkClassId,
+            className: selectedClass?.name || 'Tanpa Kelas'
+          });
+        }
+      }
+    });
+
+    if (parsed.length === 0) {
+      showErrorToast('Format data tidak sesuai. Pastikan format: NIS, Nama, Gender(L/P), Tempat Lahir, Tgl Lahir, Alamat, No HP');
+      return;
+    }
+
+    setParsedPreview(parsed);
+    showSuccessToast(`${parsed.length} baris data siswa berhasil diproses.`);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        setRawText(content);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleConfirmBulkUpload = () => {
+    if (parsedPreview.length === 0) return;
+    bulkAddStudents(parsedPreview);
+    setIsBulkModalOpen(false);
+  };
+
   const handleDelete = async (id: string, name: string) => {
     const confirm = await showConfirmModal(
       'Hapus Data Siswa',
@@ -114,18 +203,43 @@ export const SiswaPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
         <div>
           <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            <GraduationCap className="w-6 h-6 text-[#696cff]" /> Manajemen Data Siswa
+            <GraduationCap className="w-6 h-6 text-[#696cff]" /> Data Siswa Sekolah
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">Kelola profil biodata, NIS, dan penempatan kelas siswa</p>
+          <p className="text-xs text-slate-400 mt-0.5">Direktori terintegrasi seluruh siswa, NIS, rombel, dan kontak wali murid</p>
         </div>
 
-        <button
-          onClick={openCreateModal}
-          className="px-4 py-2.5 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 transition-all flex items-center gap-2 shrink-0"
-        >
-          <Plus className="w-4 h-4" /> Tambah Siswa Baru
-        </button>
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={openBulkModal}
+              className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-md shadow-emerald-500/20 transition-all flex items-center gap-2 shrink-0 cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4" /> Bulk Upload Siswa (Excel/CSV)
+            </button>
+            <button
+              onClick={openCreateModal}
+              className="px-4 py-2.5 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 transition-all flex items-center gap-2 shrink-0 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Tambah Siswa Baru
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Teacher Role Notice */}
+      {!isAdmin && (
+        <div className="bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-900/50 p-4 rounded-2xl flex items-start gap-3">
+          <Info className="w-5 h-5 text-[#696cff] shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <h4 className="text-xs font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-2">
+              <Users className="w-3.5 h-3.5" /> Data Siswa Terintegrasi Terpusat oleh Administrator
+            </h4>
+            <p className="text-xs text-indigo-700 dark:text-indigo-300">
+              Pengelolaan penambahan, pembaruan, dan unggah data siswa dilakukan secara terpusat oleh Admin Sekolah. Sebagai Guru, Anda memiliki akses penuh untuk melihat seluruh siswa dan menggunakannya pada modul Nilai, Absensi, serta Jurnal Mengajar.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Filter Bar */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -144,7 +258,7 @@ export const SiswaPage: React.FC = () => {
           <select
             value={selectedClassFilter}
             onChange={(e) => setSelectedClassFilter(e.target.value)}
-            className="w-full bg-transparent px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+            className="w-full bg-transparent px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden cursor-pointer"
           >
             <option value="all">Semua Rombongan Belajar (Kelas)</option>
             {classes.map((c) => (
@@ -168,13 +282,13 @@ export const SiswaPage: React.FC = () => {
                 <th className="px-6 py-4">Kelas</th>
                 <th className="px-6 py-4">Tempat, Tgl Lahir</th>
                 <th className="px-6 py-4">No HP Ortu</th>
-                <th className="px-6 py-4 text-center">Aksi</th>
+                {isAdmin && <th className="px-6 py-4 text-center">Aksi</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-200">
               {filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-slate-400">
+                  <td colSpan={isAdmin ? 7 : 6} className="px-6 py-8 text-center text-slate-400">
                     Tidak ada data siswa ditemukan.
                   </td>
                 </tr>
@@ -212,22 +326,24 @@ export const SiswaPage: React.FC = () => {
                         <span>{std.parentPhone || '-'}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => openEditModal(std)}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-[#696cff] hover:bg-[#696cff]/10 transition-colors"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(std.id, std.fullName)}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
+                    {isAdmin && (
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => openEditModal(std)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-[#696cff] hover:bg-[#696cff]/10 transition-colors cursor-pointer"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(std.id, std.fullName)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
@@ -236,128 +352,262 @@ export const SiswaPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal CRUD Siswa */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={editingStudent ? 'Edit Biodata Siswa' : 'Tambah Siswa Baru'}
-      >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+      {/* Modal Single CRUD Siswa (Admin Only) */}
+      {isAdmin && (
+        <Modal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          title={editingStudent ? 'Edit Biodata Siswa' : 'Tambah Siswa Baru'}
+        >
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">NIS *</label>
+                <input
+                  type="text"
+                  required
+                  value={nis}
+                  onChange={(e) => setNis(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Pilih Kelas *</label>
+                <select
+                  required
+                  value={classId}
+                  onChange={(e) => setClassId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
+                >
+                  <option value="">-- Pilih Kelas --</option>
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      Kelas {c.name} ({c.academicYear})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">NIS *</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Nama Lengkap Siswa *</label>
               <input
                 type="text"
                 required
-                value={nis}
-                onChange={(e) => setNis(e.target.value)}
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Contoh: Aditya Pratama"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Pilih Kelas *</label>
-              <select
-                required
-                value={classId}
-                onChange={(e) => setClassId(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
-              >
-                <option value="">-- Pilih Kelas --</option>
-                {classes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    Kelas {c.name} ({c.academicYear})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Jenis Kelamin</label>
+                <select
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value as 'L' | 'P')}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
+                >
+                  <option value="L">Laki-laki (L)</option>
+                  <option value="P">Perempuan (P)</option>
+                </select>
+              </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Nama Lengkap Siswa *</label>
-            <input
-              type="text"
-              required
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Contoh: Aditya Pratama"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
-            />
-          </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tempat Lahir</label>
+                <input
+                  type="text"
+                  value={birthPlace}
+                  onChange={(e) => setBirthPlace(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
+                />
+              </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Jenis Kelamin</label>
-              <select
-                value={gender}
-                onChange={(e) => setGender(e.target.value as 'L' | 'P')}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
-              >
-                <option value="L">Laki-laki (L)</option>
-                <option value="P">Perempuan (P)</option>
-              </select>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tanggal Lahir</label>
+                <input
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
+                />
+              </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tempat Lahir</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Nomor Telepon / WhatsApp Orang Tua</label>
               <input
-                type="text"
-                value={birthPlace}
-                onChange={(e) => setBirthPlace(e.target.value)}
+                type="tel"
+                value={parentPhone}
+                onChange={(e) => setParentPhone(e.target.value)}
+                placeholder="081233445566"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tanggal Lahir</label>
-              <input
-                type="date"
-                value={birthDate}
-                onChange={(e) => setBirthDate(e.target.value)}
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Alamat Tempat Tinggal</label>
+              <textarea
+                rows={2}
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Jl. Merdeka No. 12..."
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
               />
             </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Nomor Telepon / WhatsApp Orang Tua</label>
-            <input
-              type="tel"
-              value={parentPhone}
-              onChange={(e) => setParentPhone(e.target.value)}
-              placeholder="081233445566"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
-            />
-          </div>
+            <div className="pt-3 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2.5 rounded-xl bg-[#696cff] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 hover:bg-[#5f61e6]"
+              >
+                Simpan Data Siswa
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Alamat Tempat Tinggal</label>
-            <textarea
-              rows={2}
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="Jl. Merdeka No. 12..."
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
-            />
-          </div>
+      {/* Modal Bulk Upload Siswa (Admin Only) */}
+      {isAdmin && (
+        <Modal
+          isOpen={isBulkModalOpen}
+          onClose={() => setIsBulkModalOpen(false)}
+          title="Upload / Impor Banyak Data Siswa (Bulk Import)"
+        >
+          <div className="space-y-5">
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl text-xs space-y-1">
+              <p className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                <FileSpreadsheet className="w-4 h-4 text-amber-600" />
+                <span>Format Data Teks / CSV / Excel (Dipisahkan Tab atau Koma)</span>
+              </p>
+              <p className="text-amber-700 dark:text-amber-300 text-[11px]">
+                Urutan Kolom: <strong>NIS, Nama Lengkap, Gender(L/P), Tempat Lahir, Tgl Lahir(YYYY-MM-DD), Alamat, No HP Ortu</strong>
+              </p>
+            </div>
 
-          <div className="pt-3 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Pilih Kelas Tujuan untuk Data Ini *
+                </label>
+                <select
+                  value={bulkClassId}
+                  onChange={(e) => setBulkClassId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold focus:ring-2 focus:ring-[#696cff]"
+                >
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      Kelas {c.name} ({c.academicYear})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Unggah File (.csv / .txt)
+                </label>
+                <input
+                  type="file"
+                  accept=".csv, .txt"
+                  onChange={handleFileUpload}
+                  className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-[#696cff]/10 file:text-[#696cff] hover:file:bg-[#696cff]/20 cursor-pointer"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                Atau Paste Langsung Teks dari Excel / Google Sheets
+              </label>
+              <textarea
+                rows={5}
+                value={rawText}
+                onChange={(e) => setRawText(e.target.value)}
+                placeholder={`2026101\tAditya Pratama\tL\tJakarta\t2012-05-14\tJl. Merdeka No 12\t081233445566\n2026102\tAnnisa Tri Hapsari\tP\tBandung\t2012-08-20\tJl. Melati No 45\t081277889900`}
+                className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-[#696cff]"
+              />
+            </div>
+
             <button
               type="button"
-              onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs"
+              onClick={parseRawTextData}
+              className="w-full py-2.5 rounded-xl bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 text-white font-bold text-xs shadow-md flex items-center justify-center gap-2"
             >
-              Batal
+              <Upload className="w-4 h-4" /> Pratinjau & Saring Data
             </button>
-            <button
-              type="submit"
-              className="px-5 py-2.5 rounded-xl bg-[#696cff] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 hover:bg-[#5f61e6]"
-            >
-              Simpan Data Siswa
-            </button>
+
+            {/* Parsed Preview Table */}
+            {parsedPreview.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    <span>Pratinjau Data ({parsedPreview.length} Siswa Siap Diimpor)</span>
+                  </h4>
+                </div>
+
+                <div className="max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl">
+                  <table className="w-full text-left text-[11px]">
+                    <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold sticky top-0">
+                      <tr>
+                        <th className="p-2">NIS</th>
+                        <th className="p-2">Nama</th>
+                        <th className="p-2">Gender</th>
+                        <th className="p-2">Kelas</th>
+                        <th className="p-2">No HP Ortu</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {parsedPreview.map((item, idx) => (
+                        <tr key={idx}>
+                          <td className="p-2 font-bold text-[#696cff]">{item.nis}</td>
+                          <td className="p-2 font-semibold text-slate-800 dark:text-slate-200">{item.fullName}</td>
+                          <td className="p-2">{item.gender}</td>
+                          <td className="p-2">{item.className}</td>
+                          <td className="p-2">{item.parentPhone}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-3 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsBulkModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={parsedPreview.length === 0}
+                onClick={handleConfirmBulkUpload}
+                className={`px-5 py-2.5 rounded-xl text-white font-bold text-xs shadow-md flex items-center gap-1.5 ${
+                  parsedPreview.length > 0
+                    ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20'
+                    : 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed'
+                }`}
+              >
+                <CheckCircle2 className="w-4 h-4" /> Simpan {parsedPreview.length} Data Siswa
+              </button>
+            </div>
           </div>
-        </form>
-      </Modal>
+        </Modal>
+      )}
     </div>
   );
 };

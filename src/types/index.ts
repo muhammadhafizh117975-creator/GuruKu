@@ -1,3 +1,12 @@
+export interface AcademicYearItem {
+  id: string;
+  year: string; // e.g. "2025/2026"
+  semester: '1' | '2';
+  isActive: boolean;
+  status: 'Aktif' | 'Non-Aktif';
+  createdAt: string;
+}
+
 export type UserRole = 'admin' | 'guru';
 
 export interface Profile {
