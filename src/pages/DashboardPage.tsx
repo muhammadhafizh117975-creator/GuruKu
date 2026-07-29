@@ -81,10 +81,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActiveTab }) =>
       {
         label: 'Jumlah Presensi Siswa',
         data: [
-          attendanceCounts.Hadir || 18,
-          attendanceCounts.Izin || 3,
-          attendanceCounts.Sakit || 2,
-          attendanceCounts.Alfa || 1
+          attendanceCounts.Hadir,
+          attendanceCounts.Izin,
+          attendanceCounts.Sakit,
+          attendanceCounts.Alfa
         ],
         backgroundColor: [
           '#28c76f', // Green
@@ -111,10 +111,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActiveTab }) =>
       {
         label: 'Jumlah Siswa',
         data: [
-          predicateCounts.A || 12,
-          predicateCounts.B || 18,
-          predicateCounts.C || 5,
-          predicateCounts.D || 1
+          predicateCounts.A,
+          predicateCounts.B,
+          predicateCounts.C,
+          predicateCounts.D
         ],
         borderColor: '#696cff',
         backgroundColor: 'rgba(105, 108, 255, 0.2)',
@@ -265,20 +265,27 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActiveTab }) =>
             </button>
           </div>
           <div className="h-64 flex items-center justify-center">
-            {/* ChartJS Bar Rendering */}
-            <Bar
-              data={attendanceChartData}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: { display: false }
-                },
-                scales: {
-                  y: { beginAtZero: true }
-                }
-              }}
-            />
+            {attendance.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-center p-4">
+                <CalendarCheck className="w-10 h-10 text-slate-300 dark:text-slate-600 mb-2 stroke-[1.5]" />
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Belum ada data presensi harian</p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Grafik akan terisi secara otomatis setelah data presensi diinput.</p>
+              </div>
+            ) : (
+              <Bar
+                data={attendanceChartData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { display: false }
+                  },
+                  scales: {
+                    y: { beginAtZero: true }
+                  }
+                }}
+              />
+            )}
           </div>
         </div>
 
@@ -299,19 +306,27 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActiveTab }) =>
             </button>
           </div>
           <div className="h-64 flex items-center justify-center">
-            <Line
-              data={gradeChartData}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: { display: false }
-                },
-                scales: {
-                  y: { beginAtZero: true }
-                }
-              }}
-            />
+            {grades.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-center p-4">
+                <Award className="w-10 h-10 text-slate-300 dark:text-slate-600 mb-2 stroke-[1.5]" />
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Belum ada data nilai siswa</p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Grafik akan terisi secara otomatis setelah data nilai diinput.</p>
+              </div>
+            ) : (
+              <Line
+                data={gradeChartData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { display: false }
+                  },
+                  scales: {
+                    y: { beginAtZero: true }
+                  }
+                }}
+              />
+            )}
           </div>
         </div>
       </div>

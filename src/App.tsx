@@ -27,6 +27,12 @@ const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
 
   React.useEffect(() => {
+    if (user) {
+      setActiveTab('dashboard');
+    }
+  }, [user?.id]);
+
+  React.useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark') ||
       localStorage.getItem('guruku_theme') !== 'light';
     if (isDark) {
