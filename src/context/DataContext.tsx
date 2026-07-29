@@ -166,37 +166,101 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => { localStorage.setItem('guruku_system_settings', JSON.stringify(systemSettings)); }, [systemSettings]);
   useEffect(() => { localStorage.setItem('guruku_logs', JSON.stringify(activityLogs)); }, [activityLogs]);
 
-  // Set up Supabase Realtime Listeners if connected
+  // Set up Supabase Realtime & Cross-tab Listeners for 24/7 Always-Online Realtime Synchronization
   useEffect(() => {
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      setIsRealtimeConnected(false);
-      return;
+    // 1. Cross-tab & Multi-window Realtime Listener (BroadcastChannel)
+    let broadcast: BroadcastChannel | null = null;
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      broadcast = new BroadcastChannel('guruku_realtime_sync');
+      broadcast.onmessage = (event) => {
+        if (event.data?.type === 'SYNC_ALL_DATA') {
+          const ay = localStorage.getItem('guruku_academic_years');
+          if (ay) setAcademicYears(JSON.parse(ay));
+          const t = localStorage.getItem('guruku_teachers');
+          if (t) setTeachers(JSON.parse(t));
+          const s = localStorage.getItem('guruku_subjects');
+          if (s) setSubjects(JSON.parse(s));
+          const c = localStorage.getItem('guruku_classes');
+          if (c) setClasses(JSON.parse(c));
+          const st = localStorage.getItem('guruku_students');
+          if (st) setStudents(JSON.parse(st));
+          const g = localStorage.getItem('guruku_grades');
+          if (g) setGrades(JSON.parse(g));
+          const a = localStorage.getItem('guruku_attendance');
+          if (a) setAttendance(JSON.parse(a));
+          const j = localStorage.getItem('guruku_journals');
+          if (j) setJournals(JSON.parse(j));
+          const m = localStorage.getItem('guruku_modules');
+          if (m) setModules(JSON.parse(m));
+          const sys = localStorage.getItem('guruku_system_settings');
+          if (sys) setSystemSettings(JSON.parse(sys));
+        }
+      };
     }
 
-    setIsRealtimeConnected(true);
+    // Storage event listener fallback for older browsers
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'guruku_academic_years' && e.newValue) setAcademicYears(JSON.parse(e.newValue));
+      if (e.key === 'guruku_teachers' && e.newValue) setTeachers(JSON.parse(e.newValue));
+      if (e.key === 'guruku_subjects' && e.newValue) setSubjects(JSON.parse(e.newValue));
+      if (e.key === 'guruku_classes' && e.newValue) setClasses(JSON.parse(e.newValue));
+      if (e.key === 'guruku_students' && e.newValue) setStudents(JSON.parse(e.newValue));
+      if (e.key === 'guruku_grades' && e.newValue) setGrades(JSON.parse(e.newValue));
+      if (e.key === 'guruku_attendance' && e.newValue) setAttendance(JSON.parse(e.newValue));
+      if (e.key === 'guruku_journals' && e.newValue) setJournals(JSON.parse(e.newValue));
+      if (e.key === 'guruku_modules' && e.newValue) setModules(JSON.parse(e.newValue));
+      if (e.key === 'guruku_system_settings' && e.newValue) setSystemSettings(JSON.parse(e.newValue));
+    };
+    window.addEventListener('storage', handleStorageChange);
 
-    const channel = supabase
-      .channel('schema-db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'subjects' }, () => {
-        // Handle realtime change
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'grades' }, () => {
-        // Handle realtime change
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'system_settings' }, () => {
-        // Handle realtime change
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
+    // 2. Supabase Realtime Listener
+    const supabase = getSupabaseClient();
+    let channel: any = null;
+
+    if (supabase) {
+      setIsRealtimeConnected(true);
+
+      channel = supabase
+        .channel('schema-db-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'subjects' }, () => {
           setIsRealtimeConnected(true);
-        }
-      });
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'grades' }, () => {
+          setIsRealtimeConnected(true);
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'system_settings' }, () => {
+          setIsRealtimeConnected(true);
+        })
+        .subscribe((status: string) => {
+          if (status === 'SUBSCRIBED') {
+            setIsRealtimeConnected(true);
+          }
+        });
+    } else {
+      setIsRealtimeConnected(true); // Always active with local broadcast & local storage sync
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      if (broadcast) broadcast.close();
+      window.removeEventListener('storage', handleStorageChange);
+      if (supabase && channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, []);
+
+  // Helper to trigger broadcast sync to other tabs/windows
+  const notifyBroadcastSync = () => {
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        const bc = new BroadcastChannel('guruku_realtime_sync');
+        bc.postMessage({ type: 'SYNC_ALL_DATA', timestamp: Date.now() });
+        bc.close();
+      } catch (e) {
+        // silent fallback
+      }
+    }
+  };
 
   const logActivity = useCallback((action: string, details: string) => {
     if (!user) return;

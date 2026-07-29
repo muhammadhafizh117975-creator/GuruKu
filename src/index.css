@@ -3,12 +3,32 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    min-height: 100%;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   body {
     @apply bg-slate-50 text-slate-800 dark:bg-[#161625] dark:text-slate-100 transition-colors duration-200;
   }
 }
 
-/* Custom scrollbars */
+/* Custom scrollbars for Webkit and Firefox */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
+}
+
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
   height: 6px;
