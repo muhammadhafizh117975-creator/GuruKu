@@ -10,6 +10,7 @@ export const ProfilPage: React.FC = () => {
   const { activityLogs } = useData();
 
   const [fullName, setFullName] = useState<string>(user?.fullName || '');
+  const [email, setEmail] = useState<string>(user?.email || '');
   const [nipNuptk, setNipNuptk] = useState<string>(user?.nipNuptk || '');
   const [phone, setPhone] = useState<string>(user?.phone || '');
   const [avatarUrl, setAvatarUrl] = useState<string>(user?.avatarUrl || '');
@@ -19,6 +20,16 @@ export const ProfilPage: React.FC = () => {
   const [newPassword, setNewPassword] = useState<string>('');
   const [confirmPassword, setConfirmPassword] = useState<string>('');
 
+  React.useEffect(() => {
+    if (user) {
+      setFullName(user.fullName || '');
+      setEmail(user.email || '');
+      setNipNuptk(user.nipNuptk || '');
+      setPhone(user.phone || '');
+      setAvatarUrl(user.avatarUrl || '');
+    }
+  }, [user]);
+
   const userLogs = activityLogs.filter((l) => l.userId === user?.id || user?.role === 'admin');
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
@@ -26,13 +37,14 @@ export const ProfilPage: React.FC = () => {
     setIsSaving(true);
     const success = await updateProfile({
       fullName,
+      email,
       nipNuptk,
       phone,
       avatarUrl
     });
     setIsSaving(false);
     if (success) {
-      showSuccessToast('Profil berhasil diperbarui.');
+      showSuccessToast('Email Sekolah dan profil berhasil diperbarui.');
     }
   };
 
@@ -128,14 +140,16 @@ export const ProfilPage: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Email Sekolah</label>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Email Sekolah *</label>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                     <input
                       type="email"
-                      disabled
-                      value={user?.email || ''}
-                      className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 text-sm text-slate-500 cursor-not-allowed"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="admin@guruku.sch.id"
+                      className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-[#696cff]"
                     />
                   </div>
                 </div>

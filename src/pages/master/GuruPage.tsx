@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { Modal } from '../../components/common/Modal';
-import { showSuccessToast } from '../../components/common/SweetAlert';
+import { showSuccessToast, showConfirmModal } from '../../components/common/SweetAlert';
 import { Profile } from '../../types';
 import {
   Users,
@@ -18,12 +18,14 @@ import {
   Lock,
   RefreshCw,
   Copy,
-  CheckCircle2
+  CheckCircle2,
+  Edit2,
+  Trash2
 } from 'lucide-react';
 
 export const GuruPage: React.FC = () => {
   const { user, registerGuru, adminResetPasswordGuru } = useAuth();
-  const { teachers, subjects } = useData();
+  const { teachers, addTeacher, updateTeacher, deleteTeacher, subjects } = useData();
 
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -34,6 +36,14 @@ export const GuruPage: React.FC = () => {
   const [email, setEmail] = useState<string>('');
   const [nipNuptk, setNipNuptk] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
+
+  // Edit Guru Form State
+  const [editingTeacher, setEditingTeacher] = useState<Profile | null>(null);
+  const [editFullName, setEditFullName] = useState<string>('');
+  const [editUsername, setEditUsername] = useState<string>('');
+  const [editEmail, setEditEmail] = useState<string>('');
+  const [editNipNuptk, setEditNipNuptk] = useState<string>('');
+  const [editPhone, setEditPhone] = useState<string>('');
 
   // Created Guru Info Modal State (shows auto-generated password)
   const [createdGuruInfo, setCreatedGuruInfo] = useState<{
@@ -72,7 +82,8 @@ export const GuruPage: React.FC = () => {
     if (!fullName || !username || !email || !nipNuptk) return;
 
     const result = await registerGuru(fullName, email, username, nipNuptk, phone);
-    if (result.success && result.password) {
+    if (result.success && result.password && result.profile) {
+      addTeacher(result.profile);
       setIsModalOpen(false);
       setCreatedGuruInfo({
         fullName,
@@ -85,6 +96,41 @@ export const GuruPage: React.FC = () => {
       setEmail('');
       setNipNuptk('');
       setPhone('');
+    }
+  };
+
+  const handleOpenEditModal = (teacher: Profile) => {
+    setEditingTeacher(teacher);
+    setEditFullName(teacher.fullName || '');
+    setEditUsername(teacher.username || '');
+    setEditEmail(teacher.email || '');
+    setEditNipNuptk(teacher.nipNuptk || '');
+    setEditPhone(teacher.phone || '');
+  };
+
+  const handleSaveEditGuru = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTeacher || !editFullName || !editEmail || !editNipNuptk) return;
+
+    updateTeacher(editingTeacher.id, {
+      fullName: editFullName,
+      username: editUsername.trim().toLowerCase(),
+      email: editEmail,
+      nipNuptk: editNipNuptk,
+      phone: editPhone
+    });
+
+    setEditingTeacher(null);
+  };
+
+  const handleDeleteGuru = async (teacher: Profile) => {
+    const confirm = await showConfirmModal(
+      'Hapus Data Guru',
+      `Apakah Anda yakin ingin menghapus data akun Guru "${teacher.fullName}"?`,
+      'Ya, Hapus Data'
+    );
+    if (confirm) {
+      deleteTeacher(teacher.id);
     }
   };
 
@@ -225,16 +271,32 @@ Password: ${createdGuruInfo.password}`;
                 </div>
               </div>
 
-              <div className="mt-5 border-t border-slate-100 dark:border-slate-800 pt-3 flex items-center justify-between">
-                <span className="text-[10px] bg-emerald-500/10 text-emerald-600 font-bold px-2.5 py-1 rounded-full">
-                  Status: Aktif
+              <div className="mt-5 border-t border-slate-100 dark:border-slate-800 pt-3 flex items-center justify-between gap-2">
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-600 font-bold px-2.5 py-1 rounded-full shrink-0">
+                  Aktif
                 </span>
-                <button
-                  onClick={() => handleOpenResetModal(teacher)}
-                  className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-[#696cff]/10 text-slate-700 dark:text-slate-200 hover:text-[#696cff] text-xs font-semibold transition-colors flex items-center gap-1.5"
-                >
-                  <KeyRound className="w-3.5 h-3.5 text-[#696cff]" /> Reset Pass
-                </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => handleOpenEditModal(teacher)}
+                    title="Edit Data Guru"
+                    className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-[#696cff]/10 text-slate-600 dark:text-slate-300 hover:text-[#696cff] transition-colors cursor-pointer"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleOpenResetModal(teacher)}
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-[#696cff]/10 text-slate-700 dark:text-slate-200 hover:text-[#696cff] text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                  >
+                    <KeyRound className="w-3.5 h-3.5 text-[#696cff]" /> Reset Pass
+                  </button>
+                  <button
+                    onClick={() => handleDeleteGuru(teacher)}
+                    title="Hapus Data Guru"
+                    className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-500 hover:text-white text-rose-500 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -470,6 +532,100 @@ Password: ${createdGuruInfo.password}`;
                 className="px-5 py-2.5 rounded-xl bg-[#696cff] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 hover:bg-[#5f61e6]"
               >
                 Simpan & Reset Password
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* Modal Edit Data Guru */}
+      <Modal
+        isOpen={!!editingTeacher}
+        onClose={() => setEditingTeacher(null)}
+        title="Edit Data Guru"
+        subtitle="Perbarui informasi profil dan nomor identitas Guru"
+      >
+        {editingTeacher && (
+          <form onSubmit={handleSaveEditGuru} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Nama Lengkap & Gelar *</label>
+              <input
+                type="text"
+                required
+                value={editFullName}
+                onChange={(e) => setEditFullName(e.target.value)}
+                placeholder="Contoh: Siti Rahmawati, S.Pd."
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs focus:ring-2 focus:ring-[#696cff]"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Username Login *</label>
+                <div className="relative">
+                  <AtSign className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
+                  <input
+                    type="text"
+                    required
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value)}
+                    placeholder="siti_rahma"
+                    className="w-full pl-8 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-[#696cff]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">NIP / NUPTK *</label>
+                <input
+                  type="text"
+                  required
+                  value={editNipNuptk}
+                  onChange={(e) => setEditNipNuptk(e.target.value)}
+                  placeholder="19850614 201001 2 015"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs focus:ring-2 focus:ring-[#696cff]"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Email Sekolah *</label>
+                <input
+                  type="email"
+                  required
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  placeholder="guru@guruku.sch.id"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs focus:ring-2 focus:ring-[#696cff]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Nomor WhatsApp / HP</label>
+                <input
+                  type="text"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  placeholder="081987654321"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs focus:ring-2 focus:ring-[#696cff]"
+                />
+              </div>
+            </div>
+
+            <div className="pt-3 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setEditingTeacher(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-200 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2.5 rounded-xl bg-[#696cff] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 hover:bg-[#5f61e6] cursor-pointer"
+              >
+                Simpan Perubahan
               </button>
             </div>
           </form>

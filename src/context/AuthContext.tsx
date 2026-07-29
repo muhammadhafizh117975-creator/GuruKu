@@ -171,13 +171,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const updatedProfile = { ...user, ...updatedData, updatedAt: new Date().toISOString() };
     setUser(updatedProfile);
-    if (rememberMe) {
-      localStorage.setItem('guruku_session_user', JSON.stringify(updatedProfile));
+    localStorage.setItem('guruku_session_user', JSON.stringify(updatedProfile));
+
+    const idx = INITIAL_PROFILES.findIndex((p) => p.id === user.id);
+    if (idx !== -1) {
+      INITIAL_PROFILES[idx] = updatedProfile;
     }
 
     const supabase = getSupabaseClient();
     if (supabase) {
       await supabase.from('profiles').update({
+        email: updatedProfile.email,
         full_name: updatedProfile.fullName,
         nip_nuptk: updatedProfile.nipNuptk,
         phone: updatedProfile.phone,
