@@ -50,6 +50,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       const cleanInput = identifier.trim().toLowerCase();
+      const cleanInputNoAt = cleanInput.replace(/^@/, '');
+      const cleanPass = _password.trim();
+
       const supabase = getSupabaseClient();
       if (supabase) {
         // Query Supabase profiles table by email or username
@@ -58,13 +61,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .select('*');
 
         if (data && !error && data.length > 0) {
-          const matched = data.find((d: any) =>
-            (d.email && d.email.toLowerCase() === cleanInput) ||
-            (d.username && d.username.toLowerCase() === cleanInput)
-          );
+          const matched = data.find((d: any) => {
+            const emailMatch = d.email && d.email.toLowerCase() === cleanInput;
+            const unameMatch = d.username && (
+              d.username.toLowerCase() === cleanInput ||
+              d.username.toLowerCase() === cleanInputNoAt
+            );
+            return emailMatch || unameMatch;
+          });
 
           if (matched) {
-            if (matched.password && matched.password !== _password) {
+            if (matched.password && matched.password !== _password && matched.password !== cleanPass) {
               showErrorToast('Kata sandi (password) yang Anda masukkan tidak sesuai.');
               setLoading(false);
               return false;
@@ -73,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const profile: Profile = {
               id: matched.id,
               email: matched.email,
-              username: matched.username || cleanInput,
+              username: matched.username || cleanInputNoAt,
               fullName: matched.full_name,
               role: matched.role,
               nipNuptk: matched.nip_nuptk,
@@ -107,13 +114,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const allProfiles = [...INITIAL_PROFILES, ...savedTeachers];
-      const matched = allProfiles.find((p) =>
-        p.email.toLowerCase() === cleanInput ||
-        (p.username && p.username.toLowerCase() === cleanInput)
-      );
+      const matched = allProfiles.find((p) => {
+        const emailMatch = p.email.toLowerCase() === cleanInput;
+        const unameMatch = p.username && (
+          p.username.toLowerCase() === cleanInput ||
+          p.username.toLowerCase() === cleanInputNoAt
+        );
+        return emailMatch || unameMatch;
+      });
 
       if (matched) {
-        if (matched.password && matched.password !== _password) {
+        if (matched.password && matched.password !== _password && matched.password !== cleanPass) {
           showErrorToast('Kata sandi (password) yang Anda masukkan tidak sesuai.');
           setLoading(false);
           return false;
