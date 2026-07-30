@@ -104,11 +104,27 @@ export function getSupabaseClient(): SupabaseClient | null {
   if (supabaseClientInstance) return supabaseClientInstance;
 
   const env = (import.meta as any).env || {};
-  let url = (env.VITE_SUPABASE_URL || localStorage.getItem('guruku_supabase_url') || '').trim();
-  let anonKey = (env.VITE_SUPABASE_ANON_KEY || localStorage.getItem('guruku_supabase_key') || '').trim();
+  const envUrl = (env.VITE_SUPABASE_URL || '').trim();
+  const envKey = (env.VITE_SUPABASE_ANON_KEY || '').trim();
+  const lsUrl = (localStorage.getItem('guruku_supabase_url') || '').trim();
+  const lsKey = (localStorage.getItem('guruku_supabase_key') || '').trim();
+
+  let url = (envUrl || lsUrl).trim();
+  let anonKey = (envKey || lsKey).trim();
 
   if (url) {
     url = url.replace(/\/rest\/v1\/?$/i, '').replace(/\/+$/, '');
+  }
+
+  // FIX: log dengan jelas kredensial mana yang dipakai. Kalau ini mencetak
+  // "localStorage (per-browser)" di dua browser berbeda, itu tandanya kredensial
+  // BELUM di-set sebagai environment variable saat build/deploy — sumber utama
+  // kenapa data terlihat beda antar browser.
+  if (url && anonKey) {
+    const source = envUrl && envKey ? 'environment variable (VITE_SUPABASE_URL/ANON_KEY)' : 'localStorage (per-browser, TIDAK ikut ke browser/perangkat lain)';
+    console.info(`[GuruKu] Koneksi Supabase memakai kredensial dari: ${source}`);
+  } else {
+    console.warn('[GuruKu] Supabase belum terkonfigurasi. Set VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY di environment variable hosting.');
   }
 
   if (url && anonKey) {
@@ -136,30 +152,6 @@ export function resetSupabaseClient(url: string, key: string) {
     supabaseClientInstance = null;
   }
 }
-
-// Exported supabase instance proxy for direct component/context imports
-export const supabase = new Proxy({} as SupabaseClient, {
-  get(_target, prop) {
-    const client = getSupabaseClient();
-    if (!client) {
-      if (prop === 'channel') {
-        return () => ({
-          on: () => ({ subscribe: () => {} }),
-          subscribe: () => {}
-        });
-      }
-      if (prop === 'removeChannel') {
-        return () => {};
-      }
-      return undefined;
-    }
-    const val = (client as any)[prop];
-    if (typeof val === 'function') {
-      return val.bind(client);
-    }
-    return val;
-  }
-});
 
 // Master SQL Script untuk Reset Total & Inisialisasi Ulang Supabase Database
 export function generateSupabaseSQLScript(): string {
