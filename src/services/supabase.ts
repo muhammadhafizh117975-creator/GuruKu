@@ -140,13 +140,12 @@ export function resetSupabaseClient(url: string, key: string) {
 // Master SQL Script untuk Reset Total & Inisialisasi Ulang Supabase Database
 export function generateSupabaseSQLScript(): string {
   return `-- ============================================================
--- SCRIPT RESET TOTAL & SETUP MASTER DATABASE SUPABASE (GURUKU APP)
--- Silakan jalankan script ini di SQL Editor pada Supabase Dashboard Anda.
--- Script ini akan MENGHAPUS SEMUA DATA/TABEL LAMA dan MEMBUAT ULANG
--- struktur database bersih beserta RLS, Index, dan Realtime.
+-- MASTER RESET & SETUP DATABASE SUPABASE GURUKU APP
+-- File: supabase.schema.sql
+-- Run this script in Supabase Dashboard -> SQL Editor
 -- ============================================================
 
--- 1. DROP ALL OLD TABLES (RESET TOTAL DATABASE)
+-- 1. DROP EXISTING TABLES & STORAGE POLICIES (TOTAL RESET)
 DROP TABLE IF EXISTS public.teaching_modules CASCADE;
 DROP TABLE IF EXISTS public.teaching_journals CASCADE;
 DROP TABLE IF EXISTS public.attendance CASCADE;
@@ -157,18 +156,32 @@ DROP TABLE IF EXISTS public.subjects CASCADE;
 DROP TABLE IF EXISTS public.system_settings CASCADE;
 DROP TABLE IF EXISTS public.profiles CASCADE;
 
+-- Drop Storage Policies if exist
+DROP POLICY IF EXISTS "Public Access Modul Ajar" ON storage.objects;
+DROP POLICY IF EXISTS "Public Access Arsip" ON storage.objects;
+DROP POLICY IF EXISTS "Public Access Foto Profil" ON storage.objects;
+
 -- 2. EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- 3. TABEL PROFILES (AKUN GURU & ADMIN)
+-- 3. FUNCTION TO UPDATE UPDATED_AT TIMESTAMP
+CREATE OR REPLACE FUNCTION public.handle_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 4. TABEL PROFILES (AKUN USER/GURU/ADMIN/SUPER_ADMIN)
 CREATE TABLE public.profiles (
-  id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   email TEXT UNIQUE NOT NULL,
   username TEXT UNIQUE,
   password TEXT,
   full_name TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('admin', 'guru')),
+  role TEXT NOT NULL CHECK (role IN ('super_admin', 'admin', 'guru')),
   nip_nuptk TEXT,
   phone TEXT,
   avatar_url TEXT,
@@ -177,32 +190,49 @@ CREATE TABLE public.profiles (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Seed Default Admin Profile
+-- Trigger updated_at pada Profiles
+CREATE TRIGGER set_profiles_updated_at
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- Seed Default Admin & Super Admin Profile
 INSERT INTO public.profiles (id, email, username, password, full_name, role, nip_nuptk, phone)
-VALUES ('user_admin_01', 'admin@guruku.sch.id', 'admin', 'admin123', 'Administrator Sekolah', 'admin', '19800101 200501 1 001', '081234567890')
+VALUES 
+  ('user_superadmin_01', 'superadmin@guruku.sch.id', 'superadmin', 'super123', 'Super Admin Utama', 'super_admin', '19750101 199801 1 001', '081111111111'),
+  ('user_admin_01', 'admin@guruku.sch.id', 'admin', 'admin123', 'Administrator Sekolah', 'admin', '19800101 200501 1 001', '081234567890')
 ON CONFLICT (id) DO NOTHING;
 
--- 4. TABEL SUBJECTS (MATA PELAJARAN)
+-- 5. TABEL SUBJECTS (MATA PELAJARAN)
 CREATE TABLE public.subjects (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   code TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL,
   description TEXT,
   teacher_ids TEXT[] DEFAULT '{}',
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. TABEL CLASSES (KELAS & TINGKAT)
+CREATE TRIGGER set_subjects_updated_at
+  BEFORE UPDATE ON public.subjects
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- 6. TABEL CLASSES (KELAS & TINGKATAN)
 CREATE TABLE public.classes (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   name TEXT NOT NULL,
   grade_level TEXT NOT NULL,
   academic_year TEXT NOT NULL,
   homeroom_teacher_id TEXT REFERENCES public.profiles(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. TABEL STUDENTS (DATA SISWA)
+CREATE TRIGGER set_classes_updated_at
+  BEFORE UPDATE ON public.classes
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- 7. TABEL STUDENTS (DATA SISWA)
 CREATE TABLE public.students (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   nis TEXT UNIQUE NOT NULL,
@@ -213,10 +243,15 @@ CREATE TABLE public.students (
   address TEXT,
   parent_phone TEXT,
   class_id TEXT REFERENCES public.classes(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 7. TABEL GRADES (NILAI SISWA)
+CREATE TRIGGER set_students_updated_at
+  BEFORE UPDATE ON public.students
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- 8. TABEL GRADES (NILAI SISWA)
 CREATE TABLE public.grades (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   student_id TEXT REFERENCES public.students(id) ON DELETE CASCADE,
@@ -232,10 +267,15 @@ CREATE TABLE public.grades (
   notes TEXT,
   academic_year TEXT NOT NULL,
   semester CHAR(1) CHECK (semester IN ('1', '2')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 8. TABEL ATTENDANCE (PRESENSI / ABSENSI)
+CREATE TRIGGER set_grades_updated_at
+  BEFORE UPDATE ON public.grades
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- 9. TABEL ATTENDANCE (PRESENSI / ABSENSI SISWA)
 CREATE TABLE public.attendance (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   date DATE NOT NULL,
@@ -245,10 +285,15 @@ CREATE TABLE public.attendance (
   teacher_id TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
   status TEXT CHECK (status IN ('Hadir', 'Izin', 'Sakit', 'Alfa')),
   notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 9. TABEL TEACHING_JOURNALS (JURNAL MENGAJAR)
+CREATE TRIGGER set_attendance_updated_at
+  BEFORE UPDATE ON public.attendance
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- 10. TABEL TEACHING_JOURNALS (JURNAL MENGAJAR GURU)
 CREATE TABLE public.teaching_journals (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   date DATE NOT NULL,
@@ -264,10 +309,15 @@ CREATE TABLE public.teaching_journals (
   attachment_drive_id TEXT,
   attachment_web_view_link TEXT,
   attachment_web_content_link TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 10. TABEL TEACHING_MODULES (ARSIP MODUL AJAR / RPP)
+CREATE TRIGGER set_teaching_journals_updated_at
+  BEFORE UPDATE ON public.teaching_journals
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- 11. TABEL TEACHING_MODULES (ARSIP MODUL AJAR / RPP)
 CREATE TABLE public.teaching_modules (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   title TEXT NOT NULL,
@@ -283,27 +333,50 @@ CREATE TABLE public.teaching_modules (
   web_view_link TEXT NOT NULL,
   web_content_link TEXT NOT NULL,
   teacher_id TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 11. TABEL SYSTEM_SETTINGS (PENGATURAN KOP SURAT & MARGIN)
+CREATE TRIGGER set_teaching_modules_updated_at
+  BEFORE UPDATE ON public.teaching_modules
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- 12. TABEL SYSTEM_SETTINGS (PENGATURAN KOP SURAT, MARGIN, TAHUN AJARAN)
 CREATE TABLE public.system_settings (
   key TEXT PRIMARY KEY,
   value JSONB NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 12. INDEXES UNTUK OPTIMASI QUERY
-CREATE INDEX idx_students_class_id ON public.students(class_id);
-CREATE INDEX idx_grades_student_id ON public.grades(student_id);
-CREATE INDEX idx_grades_subject_id ON public.grades(subject_id);
-CREATE INDEX idx_grades_class_id ON public.grades(class_id);
-CREATE INDEX idx_attendance_date ON public.attendance(date);
-CREATE INDEX idx_attendance_student_id ON public.attendance(student_id);
-CREATE INDEX idx_journals_date ON public.teaching_journals(date);
-CREATE INDEX idx_modules_subject_id ON public.teaching_modules(subject_id);
+-- 13. SUPABASE STORAGE BUCKETS SETUP
+INSERT INTO storage.buckets (id, name, public)
+VALUES 
+  ('modul-ajar', 'modul-ajar', true),
+  ('arsip', 'arsip', true),
+  ('foto-profil', 'foto-profil', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
 
--- 13. ENABLE ROW LEVEL SECURITY (RLS) & PUBLIC ACCESS POLICIES
+-- Storage Policies
+CREATE POLICY "Public Read/Write Modul Ajar" ON storage.objects
+  FOR ALL USING (bucket_id = 'modul-ajar') WITH CHECK (bucket_id = 'modul-ajar');
+
+CREATE POLICY "Public Read/Write Arsip" ON storage.objects
+  FOR ALL USING (bucket_id = 'arsip') WITH CHECK (bucket_id = 'arsip');
+
+CREATE POLICY "Public Read/Write Foto Profil" ON storage.objects
+  FOR ALL USING (bucket_id = 'foto-profil') WITH CHECK (bucket_id = 'foto-profil');
+
+-- 14. INDEXES UNTUK PERFORMA OPTIMAL
+CREATE INDEX IF NOT EXISTS idx_students_class_id ON public.students(class_id);
+CREATE INDEX IF NOT EXISTS idx_grades_student_id ON public.grades(student_id);
+CREATE INDEX IF NOT EXISTS idx_grades_subject_id ON public.grades(subject_id);
+CREATE INDEX IF NOT EXISTS idx_grades_class_id ON public.grades(class_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_date ON public.attendance(date);
+CREATE INDEX IF NOT EXISTS idx_attendance_student_id ON public.attendance(student_id);
+CREATE INDEX IF NOT EXISTS idx_journals_date ON public.teaching_journals(date);
+CREATE INDEX IF NOT EXISTS idx_modules_subject_id ON public.teaching_modules(subject_id);
+
+-- 15. ROW LEVEL SECURITY (RLS) POLICIES
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subjects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.classes ENABLE ROW LEVEL SECURITY;
@@ -314,17 +387,17 @@ ALTER TABLE public.teaching_journals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.teaching_modules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow public full access on profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow public full access on subjects" ON public.subjects FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow public full access on classes" ON public.classes FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow public full access on students" ON public.students FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow public full access on grades" ON public.grades FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow public full access on attendance" ON public.attendance FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow public full access on teaching_journals" ON public.teaching_journals FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow public full access on teaching_modules" ON public.teaching_modules FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow public full access on system_settings" ON public.system_settings FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow full access on profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow full access on subjects" ON public.subjects FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow full access on classes" ON public.classes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow full access on students" ON public.students FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow full access on grades" ON public.grades FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow full access on attendance" ON public.attendance FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow full access on teaching_journals" ON public.teaching_journals FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow full access on teaching_modules" ON public.teaching_modules FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow full access on system_settings" ON public.system_settings FOR ALL USING (true) WITH CHECK (true);
 
--- 14. AKTIFKAN REALTIME PUBLICATION UNTUK SUPABASE REALTIME
+-- 16. SUPABASE REALTIME PUBLICATION
 BEGIN;
   DROP PUBLICATION IF EXISTS supabase_realtime;
   CREATE PUBLICATION supabase_realtime FOR ALL TABLES;

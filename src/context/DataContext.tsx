@@ -478,6 +478,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else {
       setAcademicYears((prev) => [newAy, ...prev]);
     }
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from('system_settings').upsert({
+        key: 'academic_years',
+        value: academicYears,
+        updated_at: new Date().toISOString()
+      }).then(({ error }: any) => {
+        if (error) console.warn('Supabase academic year save error:', error);
+      });
+    }
+
     logActivity('TAMBAH_TAHUN_AJARAN', `Menambahkan tahun pelajaran ${newAy.year} Semester ${newAy.semester}`);
     showSuccessToast('Tahun Pelajaran berhasil ditambahkan.');
   };
@@ -955,12 +967,43 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setGrades((prev) => [fullGrade, ...prev]);
     }
 
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from('grades').upsert([{
+        id: fullGrade.id,
+        student_id: fullGrade.studentId || null,
+        subject_id: fullGrade.subjectId || null,
+        class_id: fullGrade.classId || null,
+        teacher_id: fullGrade.teacherId || null,
+        assignment_score: fullGrade.assignmentScore || 0,
+        daily_score: fullGrade.dailyScore || 0,
+        pts_score: fullGrade.ptsScore || 0,
+        pas_score: fullGrade.pasScore || 0,
+        final_score: fullGrade.finalScore || 0,
+        predicate: fullGrade.predicate,
+        notes: fullGrade.notes || '',
+        academic_year: fullGrade.academicYear,
+        semester: fullGrade.semester,
+        updated_at: fullGrade.updatedAt
+      }]).then(({ error }: any) => {
+        if (error) console.warn('Supabase save grade error:', error);
+      });
+    }
+
     logActivity('INPUT_NILAI', `Menyimpan nilai ${fullGrade.studentName} (${fullGrade.subjectName})`);
     showSuccessToast('Nilai siswa berhasil disimpan.');
   };
 
   const deleteGrade = (id: string) => {
     setGrades((prev) => prev.filter((g) => g.id !== id));
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from('grades').delete().eq('id', id).then(({ error }: any) => {
+        if (error) console.warn('Supabase delete grade error:', error);
+      });
+    }
+
     logActivity('HAPUS_NILAI', `Menghapus rekaman nilai`);
     showSuccessToast('Nilai berhasil dihapus.');
   };
@@ -978,6 +1021,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     setAttendance((prev) => [...newRecords, ...prev]);
+
+    const supabase = getSupabaseClient();
+    if (supabase && newRecords.length > 0) {
+      const payload = newRecords.map((att) => ({
+        id: att.id,
+        date: att.date,
+        student_id: att.studentId || null,
+        class_id: att.classId || null,
+        subject_id: att.subjectId || null,
+        teacher_id: att.teacherId || null,
+        status: att.status,
+        notes: att.notes || '',
+        created_at: att.createdAt
+      }));
+      supabase.from('attendance').insert(payload).then(({ error }: any) => {
+        if (error) console.warn('Supabase save attendance error:', error);
+      });
+    }
+
     logActivity('INPUT_ABSENSI', `Memproses absensi untuk ${records.length} siswa`);
     showSuccessToast(`Berhasil menyimpan absensi ${records.length} siswa.`);
   };
@@ -995,12 +1057,44 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     setJournals((prev) => [newJrn, ...prev]);
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from('teaching_journals').insert([{
+        id: newJrn.id,
+        date: newJrn.date,
+        subject_id: newJrn.subjectId || null,
+        class_id: newJrn.classId || null,
+        teacher_id: newJrn.teacherId || null,
+        time_slot: newJrn.timeSlot,
+        topic: newJrn.topic,
+        method: newJrn.method,
+        attendee_count: newJrn.attendeeCount || 0,
+        notes: newJrn.notes || '',
+        attachment_name: newJrn.attachmentName || null,
+        attachment_drive_id: newJrn.attachmentDriveId || null,
+        attachment_web_view_link: newJrn.attachmentWebViewLink || null,
+        attachment_web_content_link: newJrn.attachmentWebContentLink || null,
+        created_at: newJrn.createdAt
+      }]).then(({ error }: any) => {
+        if (error) console.warn('Supabase add journal error:', error);
+      });
+    }
+
     logActivity('TAMBAH_JURNAL', `Menambahkan jurnal mengajar ${newJrn.topic}`);
     showSuccessToast('Jurnal mengajar berhasil disimpan.');
   };
 
   const deleteJournal = (id: string) => {
     setJournals((prev) => prev.filter((j) => j.id !== id));
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from('teaching_journals').delete().eq('id', id).then(({ error }: any) => {
+        if (error) console.warn('Supabase delete journal error:', error);
+      });
+    }
+
     logActivity('HAPUS_JURNAL', `Menghapus jurnal mengajar`);
     showSuccessToast('Jurnal mengajar berhasil dihapus.');
   };
@@ -1015,22 +1109,67 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     setModules((prev) => [newMod, ...prev]);
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from('teaching_modules').insert([{
+        id: newMod.id,
+        title: newMod.title,
+        subject_id: newMod.subjectId || null,
+        class_level: newMod.classLevel,
+        semester: newMod.semester,
+        academic_year: newMod.academicYear,
+        description: newMod.description || '',
+        file_type: newMod.fileType,
+        file_name: newMod.fileName,
+        file_size: newMod.fileSize || '',
+        file_drive_id: newMod.fileDriveId,
+        web_view_link: newMod.webViewLink,
+        web_content_link: newMod.webContentLink,
+        teacher_id: newMod.teacherId || null,
+        created_at: newMod.createdAt
+      }]).then(({ error }: any) => {
+        if (error) console.warn('Supabase add module error:', error);
+      });
+    }
+
     logActivity('UPLOAD_MODUL', `Mengunggah arsip modul/RPP ${newMod.title}`);
     showSuccessToast('Arsip Modul Ajar/RPP berhasil diunggah.');
   };
 
   const deleteModule = (id: string) => {
     setModules((prev) => prev.filter((m) => m.id !== id));
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from('teaching_modules').delete().eq('id', id).then(({ error }: any) => {
+        if (error) console.warn('Supabase delete module error:', error);
+      });
+    }
+
     logActivity('HAPUS_MODUL', `Menghapus arsip modul/RPP`);
     showSuccessToast('Arsip Modul Ajar/RPP dihapus.');
   };
 
   const updateSystemSettings = (updated: Partial<SystemSettings>) => {
-    setSystemSettings((prev) => ({
-      ...prev,
+    const nextSettings = {
+      ...systemSettings,
       ...updated,
       updatedAt: new Date().toISOString()
-    }));
+    };
+    setSystemSettings(nextSettings);
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from('system_settings').upsert({
+        key: 'main_config',
+        value: nextSettings,
+        updated_at: nextSettings.updatedAt
+      }).then(({ error }: any) => {
+        if (error) console.warn('Supabase update settings error:', error);
+      });
+    }
+
     logActivity('PENGATURAN_SISTEM', 'Memperbarui Pengaturan Margin Kertas & Kop Surat');
     showSuccessToast('Pengaturan sistem berhasil diperbarui.');
   };
