@@ -37,40 +37,40 @@ interface DataContextType {
   isRealtimeConnected: boolean;
 
   // Actions
-  addAcademicYear: (ay: Omit<AcademicYearItem, 'id' | 'createdAt'>) => void;
-  updateAcademicYear: (id: string, ay: Partial<AcademicYearItem>) => void;
-  setActiveAcademicYear: (id: string) => void;
-  deleteAcademicYear: (id: string) => void;
+  addAcademicYear: (ay: Omit<AcademicYearItem, 'id' | 'createdAt'>) => Promise<void>;
+  updateAcademicYear: (id: string, ay: Partial<AcademicYearItem>) => Promise<void>;
+  setActiveAcademicYear: (id: string) => Promise<void>;
+  deleteAcademicYear: (id: string) => Promise<void>;
 
-  addTeacher: (teacher: Profile) => void;
-  updateTeacher: (id: string, teacher: Partial<Profile>) => void;
-  deleteTeacher: (id: string) => void;
+  addTeacher: (teacher: Profile) => Promise<void>;
+  updateTeacher: (id: string, teacher: Partial<Profile>) => Promise<void>;
+  deleteTeacher: (id: string) => Promise<void>;
 
-  addSubject: (subj: Omit<Subject, 'id' | 'createdAt'>) => void;
-  updateSubject: (id: string, subj: Partial<Subject>) => void;
-  deleteSubject: (id: string) => void;
+  addSubject: (subj: Omit<Subject, 'id' | 'createdAt'>) => Promise<void>;
+  updateSubject: (id: string, subj: Partial<Subject>) => Promise<void>;
+  deleteSubject: (id: string) => Promise<void>;
 
-  addClass: (cls: Omit<ClassRoom, 'id' | 'createdAt'>) => void;
-  updateClass: (id: string, cls: Partial<ClassRoom>) => void;
-  deleteClass: (id: string) => void;
+  addClass: (cls: Omit<ClassRoom, 'id' | 'createdAt'>) => Promise<void>;
+  updateClass: (id: string, cls: Partial<ClassRoom>) => Promise<void>;
+  deleteClass: (id: string) => Promise<void>;
 
-  addStudent: (std: Omit<Student, 'id' | 'createdAt'>) => void;
-  bulkAddStudents: (stds: Omit<Student, 'id' | 'createdAt'>[]) => void;
-  updateStudent: (id: string, std: Partial<Student>) => void;
-  deleteStudent: (id: string) => void;
+  addStudent: (std: Omit<Student, 'id' | 'createdAt'>) => Promise<void>;
+  bulkAddStudents: (stds: Omit<Student, 'id' | 'createdAt'>[]) => Promise<void>;
+  updateStudent: (id: string, std: Partial<Student>) => Promise<void>;
+  deleteStudent: (id: string) => Promise<void>;
 
-  saveGrade: (gradeData: Omit<Grade, 'id' | 'finalScore' | 'predicate' | 'updatedAt'>) => void;
-  deleteGrade: (id: string) => void;
+  saveGrade: (gradeData: Omit<Grade, 'id' | 'finalScore' | 'predicate' | 'updatedAt'>) => Promise<void>;
+  deleteGrade: (id: string) => Promise<void>;
 
-  saveAttendanceBatch: (records: Omit<Attendance, 'id' | 'createdAt'>[]) => void;
+  saveAttendanceBatch: (records: Omit<Attendance, 'id' | 'createdAt'>[]) => Promise<void>;
 
-  addJournal: (journal: Omit<TeachingJournal, 'id' | 'createdAt'>) => void;
-  deleteJournal: (id: string) => void;
+  addJournal: (journal: Omit<TeachingJournal, 'id' | 'createdAt'>) => Promise<void>;
+  deleteJournal: (id: string) => Promise<void>;
 
-  addModule: (mod: Omit<TeachingModule, 'id' | 'createdAt'>) => void;
-  deleteModule: (id: string) => void;
+  addModule: (mod: Omit<TeachingModule, 'id' | 'createdAt'>) => Promise<void>;
+  deleteModule: (id: string) => Promise<void>;
 
-  updateSystemSettings: (settings: Partial<SystemSettings>) => void;
+  updateSystemSettings: (settings: Partial<SystemSettings>) => Promise<void>;
   logActivity: (action: string, details: string) => void;
   resetAllData: () => void;
 }
@@ -118,7 +118,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
   // Primary Database Re-Fetch Function (Single Source of Truth)
-  const fetchAllData = useCallback(async () => {
+  const loadDataFromSupabase = useCallback(async () => {
     const client = getSupabaseClient();
     if (!client) return;
 
@@ -136,6 +136,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (ayRow && Array.isArray(ayRow.value) && ayRow.value.length > 0) {
           setAcademicYears(ayRow.value);
         }
+      } else if (sysErr) {
+        console.warn('[Supabase DB Sync Error] Failed fetching system_settings:', sysErr);
       }
 
       // 2. Profiles (Guru)
@@ -159,6 +161,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             updatedAt: p.updated_at
           }));
         setTeachers(fetchedTeachers);
+      } else if (profErr) {
+        console.warn('[Supabase DB Sync Error] Failed fetching profiles:', profErr);
       }
 
       // 3. Classes
@@ -174,6 +178,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           createdAt: c.created_at
         }));
         setClasses(fetchedClasses);
+      } else if (clsErr) {
+        console.warn('[Supabase DB Sync Error] Failed fetching classes:', clsErr);
       }
 
       // 4. Subjects
@@ -189,6 +195,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           createdAt: s.created_at
         }));
         setSubjects(fetchedSubjects);
+      } else if (sbjErr) {
+        console.warn('[Supabase DB Sync Error] Failed fetching subjects:', sbjErr);
       }
 
       // 5. Students
@@ -212,6 +220,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
         });
         setStudents(fetchedStudents);
+      } else if (stdErr) {
+        console.warn('[Supabase DB Sync Error] Failed fetching students:', stdErr);
       }
 
       // 6. Grades
@@ -244,6 +254,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
         });
         setGrades(fetchedGrades);
+      } else if (grdErr) {
+        console.warn('[Supabase DB Sync Error] Failed fetching grades:', grdErr);
       }
 
       // 7. Attendance
@@ -266,6 +278,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
         });
         setAttendance(fetchedAttendance);
+      } else if (attErr) {
+        console.warn('[Supabase DB Sync Error] Failed fetching attendance:', attErr);
       }
 
       // 8. Teaching Journals
@@ -295,6 +309,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
         });
         setJournals(fetchedJournals);
+      } else if (jrnErr) {
+        console.warn('[Supabase DB Sync Error] Failed fetching teaching_journals:', jrnErr);
       }
 
       // 9. Teaching Modules
@@ -322,15 +338,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
         });
         setModules(fetchedModules);
+      } else if (modErr) {
+        console.warn('[Supabase DB Sync Error] Failed fetching teaching_modules:', modErr);
       }
     } catch (err) {
-      console.warn('[Supabase DB Sync Error] Failed to load data:', err);
+      console.error('[Supabase DB Sync Critical Error] Failed to load database state:', err);
     }
   }, []);
 
-  const loadDataFromSupabase = fetchAllData;
+  // Alias for compatibility
+  const fetchAllData = loadDataFromSupabase;
 
-  // Initialize Data Fetch and Realtime Subscriptions on Mount
+  // Initialize Data Fetch, Realtime Subscriptions, and Window Focus listener
   useEffect(() => {
     const client = getSupabaseClient();
     if (client) {
@@ -339,38 +358,64 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsRealtimeConnected(false);
     }
 
-    // 1. Fetch data awal dari Supabase
-    fetchAllData();
+    // 1. Initial Data Fetch
+    loadDataFromSupabase();
 
-    // 2. Pasang listener Realtime
+    // 2. Realtime Listener globally subscribed to schema 'public'
     const channel = supabase
-      .channel('db-changes')
+      .channel('db-changes-global')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public' },
-        (_payload) => {
-          // Ambil ulang data dari Supabase setiap kali ada perubahan di DB
-          fetchAllData();
+        (payload) => {
+          console.log('[Supabase Realtime] Change detected in public schema:', payload);
+          loadDataFromSupabase();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setIsRealtimeConnected(true);
+        }
+      });
+
+    // 3. Auto-Fetch when window/tab is focused
+    const handleFocus = () => {
+      console.log('[Window Focus] Tab refocused, re-syncing data from Supabase...');
+      loadDataFromSupabase();
+    };
+
+    window.addEventListener('focus', handleFocus);
 
     return () => {
       supabase.removeChannel(channel);
+      window.removeEventListener('focus', handleFocus);
     };
-  }, [fetchAllData]);
+  }, [loadDataFromSupabase]);
 
   // Academic Year Actions
   const saveAcademicYearsToSupabase = async (newYears: AcademicYearItem[]) => {
-    const supabase = getSupabaseClient();
-    if (supabase) {
-      await supabase.from('system_settings').upsert({
-        key: 'academic_years',
-        value: newYears,
-        updated_at: new Date().toISOString()
-      });
-      await loadDataFromSupabase();
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        const { error } = await client.from('system_settings').upsert({
+          key: 'academic_years',
+          value: newYears,
+          updated_at: new Date().toISOString()
+        });
+        if (error) {
+          console.error('[Supabase DB Error] Upsert academic_years failed:', error);
+          showErrorToast(`Gagal menyimpan Tahun Pelajaran: ${error.message}`);
+          return false;
+        }
+        await loadDataFromSupabase();
+        return true;
+      } catch (err: any) {
+        console.error('[Supabase DB Exception] saveAcademicYearsToSupabase failed:', err);
+        showErrorToast(`Gagal menyimpan Tahun Pelajaran: ${err.message || err}`);
+        return false;
+      }
     }
+    return true;
   };
 
   const addAcademicYear = async (ay: Omit<AcademicYearItem, 'id' | 'createdAt'>) => {
@@ -385,10 +430,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else {
       nextAy = [newAy, ...academicYears];
     }
-    setAcademicYears(nextAy);
-    await saveAcademicYearsToSupabase(nextAy);
-    logActivity('TAMBAH_TAHUN_AJARAN', `Menambahkan tahun pelajaran ${newAy.year} Semester ${newAy.semester}`);
-    showSuccessToast('Tahun Pelajaran berhasil ditambahkan.');
+    const success = await saveAcademicYearsToSupabase(nextAy);
+    if (success) {
+      logActivity('TAMBAH_TAHUN_AJARAN', `Menambahkan tahun pelajaran ${newAy.year} Semester ${newAy.semester}`);
+      showSuccessToast('Tahun Pelajaran berhasil ditambahkan.');
+    }
   };
 
   const updateAcademicYear = async (id: string, updated: Partial<AcademicYearItem>) => {
@@ -402,10 +448,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return item;
     });
-    setAcademicYears(nextAy);
-    await saveAcademicYearsToSupabase(nextAy);
-    logActivity('UBAH_TAHUN_AJARAN', `Memperbarui data tahun pelajaran`);
-    showSuccessToast('Tahun Pelajaran berhasil diperbarui.');
+    const success = await saveAcademicYearsToSupabase(nextAy);
+    if (success) {
+      logActivity('UBAH_TAHUN_AJARAN', `Memperbarui data tahun pelajaran`);
+      showSuccessToast('Tahun Pelajaran berhasil diperbarui.');
+    }
   };
 
   const setActiveAcademicYear = async (id: string) => {
@@ -414,27 +461,33 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isActive: item.id === id,
       status: item.id === id ? 'Aktif' : 'Non-Aktif'
     }));
-    setAcademicYears(nextAy);
-    await saveAcademicYearsToSupabase(nextAy);
-    const selected = academicYears.find((ay) => ay.id === id);
-    logActivity('AKTIFKAN_TAHUN_AJARAN', `Mengaktifkan tahun pelajaran ${selected?.year || id}`);
-    showSuccessToast(`Tahun Pelajaran ${selected?.year} Semester ${selected?.semester} diaktifkan.`);
+    const success = await saveAcademicYearsToSupabase(nextAy);
+    if (success) {
+      const selected = academicYears.find((ay) => ay.id === id);
+      logActivity('AKTIFKAN_TAHUN_AJARAN', `Mengaktifkan tahun pelajaran ${selected?.year || id}`);
+      showSuccessToast(`Tahun Pelajaran ${selected?.year} Semester ${selected?.semester} diaktifkan.`);
+    }
   };
 
   const deleteAcademicYear = async (id: string) => {
     const nextAy = academicYears.filter((item) => item.id !== id);
-    setAcademicYears(nextAy);
-    await saveAcademicYearsToSupabase(nextAy);
-    logActivity('HAPUS_TAHUN_AJARAN', `Menghapus tahun pelajaran`);
-    showSuccessToast('Tahun Pelajaran berhasil dihapus.');
+    const success = await saveAcademicYearsToSupabase(nextAy);
+    if (success) {
+      logActivity('HAPUS_TAHUN_AJARAN', `Menghapus tahun pelajaran`);
+      showSuccessToast('Tahun Pelajaran berhasil dihapus.');
+    }
   };
 
   // Teacher Actions
   const addTeacher = async (teacher: Profile) => {
-    const supabase = getSupabaseClient();
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
       console.log('[Supabase DB] Adding teacher to profiles:', teacher.fullName);
-      const { error } = await supabase.from('profiles').insert([{
+      const { error } = await client.from('profiles').insert([{
         id: teacher.id || `user_guru_${Date.now()}`,
         email: teacher.email,
         username: teacher.username,
@@ -450,19 +503,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('[Supabase DB Error] Insert teacher failed:', error);
         showErrorToast(`Gagal menyimpan data guru: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('TAMBAH_GURU', `Menambahkan akun guru ${teacher.fullName}`);
-        showSuccessToast('Data guru berhasil ditambahkan.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('TAMBAH_GURU', `Menambahkan akun guru ${teacher.fullName}`);
+      showSuccessToast('Data guru berhasil ditambahkan.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] addTeacher failed:', err);
+      showErrorToast(`Gagal menyimpan data guru: ${err.message || err}`);
     }
   };
 
   const updateTeacher = async (id: string, updated: Partial<Profile>) => {
-    const supabase = getSupabaseClient();
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
       console.log('[Supabase DB] Updating teacher profile:', id);
-      const { error } = await supabase.from('profiles').update({
+      const { error } = await client.from('profiles').update({
         full_name: updated.fullName,
         username: updated.username,
         email: updated.email,
@@ -473,37 +533,51 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('[Supabase DB Error] Update teacher failed:', error);
         showErrorToast(`Gagal memperbarui data guru: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('UBAH_GURU', `Memperbarui data guru ${updated.fullName || ''}`);
-        showSuccessToast('Data guru berhasil diperbarui.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('UBAH_GURU', `Memperbarui data guru ${updated.fullName || ''}`);
+      showSuccessToast('Data guru berhasil diperbarui.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] updateTeacher failed:', err);
+      showErrorToast(`Gagal memperbarui data guru: ${err.message || err}`);
     }
   };
 
   const deleteTeacher = async (id: string) => {
-    const supabase = getSupabaseClient();
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
       console.log('[Supabase DB] Deleting teacher profile:', id);
-      const { error } = await supabase.from('profiles').delete().eq('id', id);
+      const { error } = await client.from('profiles').delete().eq('id', id);
       if (error) {
         console.error('[Supabase DB Error] Delete teacher failed:', error);
         showErrorToast(`Gagal menghapus data guru: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('HAPUS_GURU', `Menghapus data guru`);
-        showSuccessToast('Data guru berhasil dihapus.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('HAPUS_GURU', `Menghapus data guru`);
+      showSuccessToast('Data guru berhasil dihapus.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] deleteTeacher failed:', err);
+      showErrorToast(`Gagal menghapus data guru: ${err.message || err}`);
     }
   };
 
   // Subject Actions
   const addSubject = async (subj: Omit<Subject, 'id' | 'createdAt'>) => {
-    const supabase = getSupabaseClient();
-    const newSubjId = `subj_${Date.now()}`;
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
+      const newSubjId = `subj_${Date.now()}`;
       console.log('[Supabase DB] Adding subject:', subj.name);
-      const { error } = await supabase.from('subjects').insert([{
+      const { error } = await client.from('subjects').insert([{
         id: newSubjId,
         code: subj.code,
         name: subj.name,
@@ -514,17 +588,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('[Supabase DB Error] Insert subject failed:', error);
         showErrorToast(`Gagal menambah mata pelajaran: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('TAMBAH_MATA_PELAJARAN', `Menambahkan mata pelajaran ${subj.name}`);
-        showSuccessToast('Mata Pelajaran berhasil ditambahkan.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('TAMBAH_MATA_PELAJARAN', `Menambahkan mata pelajaran ${subj.name}`);
+      showSuccessToast('Mata Pelajaran berhasil ditambahkan.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] addSubject failed:', err);
+      showErrorToast(`Gagal menambah mata pelajaran: ${err.message || err}`);
     }
   };
 
   const updateSubject = async (id: string, updated: Partial<Subject>) => {
-    const supabase = getSupabaseClient();
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
       console.log('[Supabase DB] Updating subject:', id);
       const payload: any = {};
       if (updated.code) payload.code = updated.code;
@@ -532,41 +613,55 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (updated.description !== undefined) payload.description = updated.description;
       if (updated.teacherIds) payload.teacher_ids = updated.teacherIds;
 
-      const { error } = await supabase.from('subjects').update(payload).eq('id', id);
+      const { error } = await client.from('subjects').update(payload).eq('id', id);
       if (error) {
         console.error('[Supabase DB Error] Update subject failed:', error);
         showErrorToast(`Gagal memperbarui mata pelajaran: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('UBAH_MATA_PELAJARAN', `Memperbarui data mata pelajaran`);
-        showSuccessToast('Mata Pelajaran berhasil diperbarui.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('UBAH_MATA_PELAJARAN', `Memperbarui data mata pelajaran`);
+      showSuccessToast('Mata Pelajaran berhasil diperbarui.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] updateSubject failed:', err);
+      showErrorToast(`Gagal memperbarui mata pelajaran: ${err.message || err}`);
     }
   };
 
   const deleteSubject = async (id: string) => {
-    const supabase = getSupabaseClient();
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
       console.log('[Supabase DB] Deleting subject:', id);
-      const { error } = await supabase.from('subjects').delete().eq('id', id);
+      const { error } = await client.from('subjects').delete().eq('id', id);
       if (error) {
         console.error('[Supabase DB Error] Delete subject failed:', error);
         showErrorToast(`Gagal menghapus mata pelajaran: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('HAPUS_MATA_PELAJARAN', `Menghapus mata pelajaran`);
-        showSuccessToast('Mata Pelajaran berhasil dihapus.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('HAPUS_MATA_PELAJARAN', `Menghapus mata pelajaran`);
+      showSuccessToast('Mata Pelajaran berhasil dihapus.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] deleteSubject failed:', err);
+      showErrorToast(`Gagal menghapus mata pelajaran: ${err.message || err}`);
     }
   };
 
   // Class Actions
   const addClass = async (cls: Omit<ClassRoom, 'id' | 'createdAt'>) => {
-    const supabase = getSupabaseClient();
-    const newClassId = `class_${Date.now()}`;
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
+      const newClassId = `class_${Date.now()}`;
       console.log('[Supabase DB] Adding class:', cls.name);
-      const { error } = await supabase.from('classes').insert([{
+      const { error } = await client.from('classes').insert([{
         id: newClassId,
         name: cls.name,
         grade_level: cls.gradeLevel,
@@ -577,17 +672,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('[Supabase DB Error] Insert class failed:', error);
         showErrorToast(`Gagal menambah kelas: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('TAMBAH_KELAS', `Menambahkan kelas ${cls.name}`);
-        showSuccessToast('Kelas berhasil ditambahkan.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('TAMBAH_KELAS', `Menambahkan kelas ${cls.name}`);
+      showSuccessToast('Kelas berhasil ditambahkan.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] addClass failed:', err);
+      showErrorToast(`Gagal menambah kelas: ${err.message || err}`);
     }
   };
 
   const updateClass = async (id: string, updated: Partial<ClassRoom>) => {
-    const supabase = getSupabaseClient();
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
       console.log('[Supabase DB] Updating class:', id);
       const payload: any = {};
       if (updated.name) payload.name = updated.name;
@@ -595,41 +697,55 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (updated.academicYear) payload.academic_year = updated.academicYear;
       if (updated.homeroomTeacherId !== undefined) payload.homeroom_teacher_id = updated.homeroomTeacherId || null;
 
-      const { error } = await supabase.from('classes').update(payload).eq('id', id);
+      const { error } = await client.from('classes').update(payload).eq('id', id);
       if (error) {
         console.error('[Supabase DB Error] Update class failed:', error);
         showErrorToast(`Gagal memperbarui kelas: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('UBAH_KELAS', `Memperbarui data kelas`);
-        showSuccessToast('Kelas berhasil diperbarui.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('UBAH_KELAS', `Memperbarui data kelas`);
+      showSuccessToast('Kelas berhasil diperbarui.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] updateClass failed:', err);
+      showErrorToast(`Gagal memperbarui kelas: ${err.message || err}`);
     }
   };
 
   const deleteClass = async (id: string) => {
-    const supabase = getSupabaseClient();
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
       console.log('[Supabase DB] Deleting class:', id);
-      const { error } = await supabase.from('classes').delete().eq('id', id);
+      const { error } = await client.from('classes').delete().eq('id', id);
       if (error) {
         console.error('[Supabase DB Error] Delete class failed:', error);
         showErrorToast(`Gagal menghapus kelas: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('HAPUS_KELAS', `Menghapus kelas`);
-        showSuccessToast('Kelas berhasil dihapus.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('HAPUS_KELAS', `Menghapus kelas`);
+      showSuccessToast('Kelas berhasil dihapus.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] deleteClass failed:', err);
+      showErrorToast(`Gagal menghapus kelas: ${err.message || err}`);
     }
   };
 
   // Student Actions
   const addStudent = async (std: Omit<Student, 'id' | 'createdAt'>) => {
-    const supabase = getSupabaseClient();
-    const newStdId = `std_${Date.now()}`;
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
+      const newStdId = `std_${Date.now()}`;
       console.log('[Supabase DB] Adding student:', std.fullName);
-      const { error } = await supabase.from('students').insert([{
+      const { error } = await client.from('students').insert([{
         id: newStdId,
         nis: std.nis,
         full_name: std.fullName,
@@ -644,17 +760,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('[Supabase DB Error] Insert student failed:', error);
         showErrorToast(`Gagal menambah siswa: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('TAMBAH_SISWA', `Menambahkan siswa ${std.fullName}`);
-        showSuccessToast('Siswa berhasil ditambahkan.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('TAMBAH_SISWA', `Menambahkan siswa ${std.fullName}`);
+      showSuccessToast('Siswa berhasil ditambahkan.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] addStudent failed:', err);
+      showErrorToast(`Gagal menambah siswa: ${err.message || err}`);
     }
   };
 
   const bulkAddStudents = async (stdsList: Omit<Student, 'id' | 'createdAt'>[]) => {
-    const supabase = getSupabaseClient();
-    if (supabase && stdsList.length > 0) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    if (stdsList.length === 0) return;
+
+    try {
       console.log('[Supabase DB] Bulk inserting students:', stdsList.length);
       const now = new Date().toISOString();
       const payload = stdsList.map((std, idx) => {
@@ -673,21 +798,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       });
 
-      const { error } = await supabase.from('students').insert(payload);
+      const { error } = await client.from('students').insert(payload);
       if (error) {
         console.error('[Supabase DB Error] Bulk insert students failed:', error);
         showErrorToast(`Gagal mengunggah data siswa: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('BULK_UPLOAD_SISWA', `Berhasil mengunggah ${stdsList.length} data siswa baru`);
-        showSuccessToast(`Berhasil mengimpor ${stdsList.length} data siswa baru.`);
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('BULK_UPLOAD_SISWA', `Berhasil mengunggah ${stdsList.length} data siswa baru`);
+      showSuccessToast(`Berhasil mengimpor ${stdsList.length} data siswa baru.`);
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] bulkAddStudents failed:', err);
+      showErrorToast(`Gagal mengunggah data siswa: ${err.message || err}`);
     }
   };
 
   const updateStudent = async (id: string, updated: Partial<Student>) => {
-    const supabase = getSupabaseClient();
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
       console.log('[Supabase DB] Updating student:', id);
       const payload: any = {};
       if (updated.nis) payload.nis = updated.nis;
@@ -699,31 +831,41 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (updated.parentPhone !== undefined) payload.parent_phone = updated.parentPhone;
       if (updated.classId !== undefined) payload.class_id = updated.classId || null;
 
-      const { error } = await supabase.from('students').update(payload).eq('id', id);
+      const { error } = await client.from('students').update(payload).eq('id', id);
       if (error) {
         console.error('[Supabase DB Error] Update student failed:', error);
         showErrorToast(`Gagal memperbarui data siswa: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('UBAH_SISWA', `Memperbarui data siswa`);
-        showSuccessToast('Data siswa berhasil diperbarui.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('UBAH_SISWA', `Memperbarui data siswa`);
+      showSuccessToast('Data siswa berhasil diperbarui.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] updateStudent failed:', err);
+      showErrorToast(`Gagal memperbarui data siswa: ${err.message || err}`);
     }
   };
 
   const deleteStudent = async (id: string) => {
-    const supabase = getSupabaseClient();
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
       console.log('[Supabase DB] Deleting student:', id);
-      const { error } = await supabase.from('students').delete().eq('id', id);
+      const { error } = await client.from('students').delete().eq('id', id);
       if (error) {
         console.error('[Supabase DB Error] Delete student failed:', error);
         showErrorToast(`Gagal menghapus siswa: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('HAPUS_SISWA', `Menghapus siswa`);
-        showSuccessToast('Data siswa berhasil dihapus.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('HAPUS_SISWA', `Menghapus siswa`);
+      showSuccessToast('Data siswa berhasil dihapus.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] deleteStudent failed:', err);
+      showErrorToast(`Gagal menghapus siswa: ${err.message || err}`);
     }
   };
 
@@ -740,25 +882,30 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const saveGrade = async (gradeData: Omit<Grade, 'id' | 'finalScore' | 'predicate' | 'updatedAt'>) => {
-    const { finalScore, predicate } = calculateGradeDetails(
-      gradeData.assignmentScore,
-      gradeData.dailyScore,
-      gradeData.ptsScore,
-      gradeData.pasScore
-    );
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
 
-    const existingGrade = grades.find(
-      (g) =>
-        g.studentId === gradeData.studentId &&
-        g.subjectId === gradeData.subjectId &&
-        g.semester === gradeData.semester
-    );
+    try {
+      const { finalScore, predicate } = calculateGradeDetails(
+        gradeData.assignmentScore,
+        gradeData.dailyScore,
+        gradeData.ptsScore,
+        gradeData.pasScore
+      );
 
-    const fullGradeId = existingGrade ? existingGrade.id : `grd_${Date.now()}`;
-    const supabase = getSupabaseClient();
-    if (supabase) {
+      const existingGrade = grades.find(
+        (g) =>
+          g.studentId === gradeData.studentId &&
+          g.subjectId === gradeData.subjectId &&
+          g.semester === gradeData.semester
+      );
+
+      const fullGradeId = existingGrade ? existingGrade.id : `grd_${Date.now()}`;
       console.log('[Supabase DB] Saving grade for student:', gradeData.studentId);
-      const { error } = await supabase.from('grades').upsert([{
+      const { error } = await client.from('grades').upsert([{
         id: fullGradeId,
         student_id: gradeData.studentId || null,
         subject_id: gradeData.subjectId || null,
@@ -778,34 +925,50 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('[Supabase DB Error] Save grade failed:', error);
         showErrorToast(`Gagal menyimpan nilai: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('INPUT_NILAI', `Menyimpan nilai siswa`);
-        showSuccessToast('Nilai siswa berhasil disimpan.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('INPUT_NILAI', `Menyimpan nilai siswa`);
+      showSuccessToast('Nilai siswa berhasil disimpan.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] saveGrade failed:', err);
+      showErrorToast(`Gagal menyimpan nilai: ${err.message || err}`);
     }
   };
 
   const deleteGrade = async (id: string) => {
-    const supabase = getSupabaseClient();
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
       console.log('[Supabase DB] Deleting grade:', id);
-      const { error } = await supabase.from('grades').delete().eq('id', id);
+      const { error } = await client.from('grades').delete().eq('id', id);
       if (error) {
         console.error('[Supabase DB Error] Delete grade failed:', error);
         showErrorToast(`Gagal menghapus nilai: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('HAPUS_NILAI', `Menghapus rekaman nilai`);
-        showSuccessToast('Nilai berhasil dihapus.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('HAPUS_NILAI', `Menghapus rekaman nilai`);
+      showSuccessToast('Nilai berhasil dihapus.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] deleteGrade failed:', err);
+      showErrorToast(`Gagal menghapus nilai: ${err.message || err}`);
     }
   };
 
   // Attendance Actions
   const saveAttendanceBatch = async (records: Omit<Attendance, 'id' | 'createdAt'>[]) => {
-    const supabase = getSupabaseClient();
-    if (supabase && records.length > 0) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    if (records.length === 0) return;
+
+    try {
       console.log('[Supabase DB] Saving attendance batch:', records.length);
       const now = new Date().toISOString();
       const payload = records.map((r, index) => ({
@@ -819,25 +982,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         notes: r.notes || '',
         created_at: now
       }));
-      const { error } = await supabase.from('attendance').insert(payload);
+      const { error } = await client.from('attendance').insert(payload);
       if (error) {
         console.error('[Supabase DB Error] Save attendance failed:', error);
         showErrorToast(`Gagal menyimpan absensi: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('INPUT_ABSENSI', `Memproses absensi untuk ${records.length} siswa`);
-        showSuccessToast(`Berhasil menyimpan absensi ${records.length} siswa.`);
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('INPUT_ABSENSI', `Memproses absensi untuk ${records.length} siswa`);
+      showSuccessToast(`Berhasil menyimpan absensi ${records.length} siswa.`);
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] saveAttendanceBatch failed:', err);
+      showErrorToast(`Gagal menyimpan absensi: ${err.message || err}`);
     }
   };
 
   // Journal Actions
   const addJournal = async (journal: Omit<TeachingJournal, 'id' | 'createdAt'>) => {
-    const supabase = getSupabaseClient();
-    const newJrnId = `jrn_${Date.now()}`;
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
+      const newJrnId = `jrn_${Date.now()}`;
       console.log('[Supabase DB] Adding teaching journal:', journal.topic);
-      const { error } = await supabase.from('teaching_journals').insert([{
+      const { error } = await client.from('teaching_journals').insert([{
         id: newJrnId,
         date: journal.date,
         subject_id: journal.subjectId || null,
@@ -857,37 +1027,51 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('[Supabase DB Error] Add journal failed:', error);
         showErrorToast(`Gagal menyimpan jurnal: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('TAMBAH_JURNAL', `Menambahkan jurnal mengajar ${journal.topic}`);
-        showSuccessToast('Jurnal mengajar berhasil disimpan.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('TAMBAH_JURNAL', `Menambahkan jurnal mengajar ${journal.topic}`);
+      showSuccessToast('Jurnal mengajar berhasil disimpan.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] addJournal failed:', err);
+      showErrorToast(`Gagal menyimpan jurnal: ${err.message || err}`);
     }
   };
 
   const deleteJournal = async (id: string) => {
-    const supabase = getSupabaseClient();
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
       console.log('[Supabase DB] Deleting journal:', id);
-      const { error } = await supabase.from('teaching_journals').delete().eq('id', id);
+      const { error } = await client.from('teaching_journals').delete().eq('id', id);
       if (error) {
         console.error('[Supabase DB Error] Delete journal failed:', error);
         showErrorToast(`Gagal menghapus jurnal: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('HAPUS_JURNAL', `Menghapus jurnal mengajar`);
-        showSuccessToast('Jurnal mengajar berhasil dihapus.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('HAPUS_JURNAL', `Menghapus jurnal mengajar`);
+      showSuccessToast('Jurnal mengajar berhasil dihapus.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] deleteJournal failed:', err);
+      showErrorToast(`Gagal menghapus jurnal: ${err.message || err}`);
     }
   };
 
   // Module Actions
   const addModule = async (mod: Omit<TeachingModule, 'id' | 'createdAt'>) => {
-    const supabase = getSupabaseClient();
-    const newModId = `mod_${Date.now()}`;
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
+      const newModId = `mod_${Date.now()}`;
       console.log('[Supabase DB] Adding module:', mod.title);
-      const { error } = await supabase.from('teaching_modules').insert([{
+      const { error } = await client.from('teaching_modules').insert([{
         id: newModId,
         title: mod.title,
         subject_id: mod.subjectId || null,
@@ -907,27 +1091,37 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('[Supabase DB Error] Add module failed:', error);
         showErrorToast(`Gagal mengunggah modul: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('UPLOAD_MODUL', `Mengunggah arsip modul/RPP ${mod.title}`);
-        showSuccessToast('Arsip Modul Ajar/RPP berhasil diunggah.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('UPLOAD_MODUL', `Mengunggah arsip modul/RPP ${mod.title}`);
+      showSuccessToast('Arsip Modul Ajar/RPP berhasil diunggah.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] addModule failed:', err);
+      showErrorToast(`Gagal mengunggah modul: ${err.message || err}`);
     }
   };
 
   const deleteModule = async (id: string) => {
-    const supabase = getSupabaseClient();
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
       console.log('[Supabase DB] Deleting module:', id);
-      const { error } = await supabase.from('teaching_modules').delete().eq('id', id);
+      const { error } = await client.from('teaching_modules').delete().eq('id', id);
       if (error) {
         console.error('[Supabase DB Error] Delete module failed:', error);
         showErrorToast(`Gagal menghapus modul: ${error.message}`);
-      } else {
-        await loadDataFromSupabase();
-        logActivity('HAPUS_MODUL', `Menghapus arsip modul/RPP`);
-        showSuccessToast('Arsip Modul Ajar/RPP dihapus.');
+        return;
       }
+      await loadDataFromSupabase();
+      logActivity('HAPUS_MODUL', `Menghapus arsip modul/RPP`);
+      showSuccessToast('Arsip Modul Ajar/RPP dihapus.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] deleteModule failed:', err);
+      showErrorToast(`Gagal menghapus modul: ${err.message || err}`);
     }
   };
 
@@ -938,21 +1132,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...updated,
       updatedAt: new Date().toISOString()
     };
-    setSystemSettings(nextSettings);
 
-    const supabase = getSupabaseClient();
-    if (supabase) {
-      const { error } = await supabase.from('system_settings').upsert({
-        key: 'main_config',
-        value: nextSettings,
-        updated_at: nextSettings.updatedAt
-      });
-      if (error) {
-        console.error('[Supabase DB Error] Update system settings failed:', error);
-      } else {
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        const { error } = await client.from('system_settings').upsert({
+          key: 'main_config',
+          value: nextSettings,
+          updated_at: nextSettings.updatedAt
+        });
+        if (error) {
+          console.error('[Supabase DB Error] Update system settings failed:', error);
+          showErrorToast(`Gagal menyimpan pengaturan sistem: ${error.message}`);
+          return;
+        }
+        setSystemSettings(nextSettings);
         await loadDataFromSupabase();
         logActivity('PENGATURAN_SISTEM', 'Memperbarui Pengaturan Margin Kertas & Kop Surat');
         showSuccessToast('Pengaturan sistem berhasil diperbarui.');
+      } catch (err: any) {
+        console.error('[Supabase DB Exception] updateSystemSettings failed:', err);
+        showErrorToast(`Gagal menyimpan pengaturan sistem: ${err.message || err}`);
       }
     }
   };
