@@ -152,9 +152,44 @@ export interface LetterheadSettings {
   address?: string;
 }
 
+export interface GradeWeights {
+  assignment: number;
+  daily: number;
+  pts: number;
+  pas: number;
+}
+
+export interface PredicateThresholds {
+  aMin: number;
+  bMin: number;
+  cMin: number;
+  kkmDefault: number;
+}
+
+export interface SchoolInfoSettings {
+  schoolName: string;
+  address: string;
+  email: string;
+  phone: string;
+  timeZone: string;
+  dateFormat: string;
+  academicYearActive?: string;
+  semesterActive?: '1' | '2';
+}
+
+export interface DocumentSettings {
+  logoUrl?: string;
+  digitalSignatureUrl?: string;
+  schoolStampUrl?: string;
+}
+
 export interface SystemSettings {
   paperMargin: PaperMargin;
   letterhead: LetterheadSettings;
+  gradeWeights: GradeWeights;
+  predicateThresholds: PredicateThresholds;
+  schoolInfo: SchoolInfoSettings;
+  documentSettings?: DocumentSettings;
   neonDbUrl?: string;
   supabaseUrl?: string;
   supabaseAnonKey?: string;
@@ -172,3 +207,14 @@ export interface ActivityLog {
   details: string;
   timestamp: string;
 }
+
+export interface NotificationItem {
+  id: string;
+  userId?: string;
+  title: string;
+  message: string;
+  type?: 'info' | 'success' | 'warning' | 'error';
+  isRead: boolean;
+  createdAt: string;
+}
+

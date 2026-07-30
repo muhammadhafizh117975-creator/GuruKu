@@ -94,7 +94,7 @@ export const KelasPage: React.FC = () => {
           <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <School className="w-6 h-6 text-[#696cff]" /> Data Kelas & Rombongan Belajar
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">Kelola data kelas, tingkat pendidikan, dan wali kelas</p>
+          <p className="text-xs text-slate-400 mt-0.5">Kelola data kelas, tingkat pendidikan, dan guru pengampu</p>
         </div>
 
         {isAdmin && (
@@ -142,7 +142,7 @@ export const KelasPage: React.FC = () => {
                 <p className="text-xs text-slate-500 mt-1">Total Siswa Terdaftar: <strong className="text-[#696cff]">{studentCount} siswa</strong></p>
 
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1">
-                  <p className="text-[11px] font-bold text-slate-400 uppercase">Wali Kelas:</p>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase">Guru Pengampu:</p>
                   <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
                     <UserCheck className="w-4 h-4 text-emerald-500" />
                     <span>{homeroom ? homeroom.fullName : 'Belum Ditentukan'}</span>
@@ -221,13 +221,13 @@ export const KelasPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Pilih Wali Kelas</label>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Pilih Guru Pengampu</label>
             <select
               value={homeroomTeacherId}
               onChange={(e) => setHomeroomTeacherId(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
             >
-              <option value="">-- Pilih Wali Kelas --</option>
+              <option value="">-- Pilih Guru Pengampu --</option>
               {teachers.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.fullName} ({t.nipNuptk})

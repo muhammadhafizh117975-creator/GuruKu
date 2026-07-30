@@ -25,9 +25,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeTab
 }) => {
   const { user, logout } = useAuth();
-  const { isRealtimeConnected } = useData();
+  const {
+    isRealtimeConnected,
+    notifications,
+    unreadCount,
+    markNotificationAsRead,
+    markAllNotificationsAsRead
+  } = useData();
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState<boolean>(false);
+  const [notifDropdownOpen, setNotifDropdownOpen] = useState<boolean>(false);
 
   // Initialize theme
   useEffect(() => {
@@ -68,7 +75,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       'laporan-nilai': 'Laporan Rekapitulasi Nilai',
       'laporan-absensi': 'Laporan Rekapitulasi Absensi',
       'laporan-jurnal': 'Laporan Rekapitulasi Jurnal',
-      'pengaturan-sistem': 'Pengaturan Sistem (Margin & Kop Surat)',
+      'pengaturan-sistem': 'Pengaturan Sistem & Akademik',
       'panduan-admin': 'Panduan Setup Infrastructure Admin',
       'panduan-guru': 'Panduan Penggunaan Guru',
       'profil': 'Profil Pengguna'
@@ -128,11 +135,92 @@ export const Navbar: React.FC<NavbarProps> = ({
         </button>
 
         {/* Notification Bell */}
-        <button className="relative p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-[#696cff] transition-colors">
-          <Bell className="w-4 h-4" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500" />
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => {
+              setNotifDropdownOpen(!notifDropdownOpen);
+              setUserDropdownOpen(false);
+            }}
+            className="relative p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-[#696cff] transition-colors"
+            title="Notifikasi Administrator"
+          >
+            <Bell className="w-4 h-4" />
+            {unreadCount > 0 && (
+              <>
+                <span className="absolute -top-1 -right-1 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white shadow-xs">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+              </>
+            )}
+          </button>
+
+          {/* Dropdown Notifikasi Panel */}
+          {notifDropdownOpen && (
+            <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl z-50 overflow-hidden animate-fade-in">
+              <div className="p-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/60 dark:bg-slate-800/60">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-bold text-slate-800 dark:text-slate-100">Notifikasi System</h3>
+                  {unreadCount > 0 && (
+                    <span className="bg-[#696cff]/10 text-[#696cff] text-[10px] font-extrabold px-2 py-0.5 rounded-full">
+                      {unreadCount} Belum Dibaca
+                    </span>
+                  )}
+                </div>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={() => markAllNotificationsAsRead()}
+                    className="text-[11px] font-bold text-[#696cff] hover:underline"
+                  >
+                    Tandai Semua Dibaca
+                  </button>
+                )}
+              </div>
+
+              <div className="max-h-80 overflow-y-auto custom-scrollbar divide-y divide-slate-100 dark:divide-slate-800">
+                {notifications.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400">
+                    <Bell className="w-8 h-8 mx-auto mb-2 opacity-30 stroke-[1.5]" />
+                    <p className="text-xs font-semibold">Belum ada notifikasi.</p>
+                  </div>
+                ) : (
+                  notifications.map((n) => (
+                    <div
+                      key={n.id}
+                      onClick={() => markNotificationAsRead(n.id)}
+                      className={`p-3.5 flex items-start gap-3 cursor-pointer transition-colors ${
+                        !n.isRead
+                          ? 'bg-indigo-50/50 dark:bg-indigo-950/30 hover:bg-indigo-50/80 dark:hover:bg-indigo-950/50'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 opacity-80'
+                      }`}
+                    >
+                      <div className="mt-0.5 shrink-0">
+                        {!n.isRead ? (
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#696cff] block" />
+                        ) : (
+                          <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-700 block" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className={`text-xs font-bold truncate ${!n.isRead ? 'text-slate-800 dark:text-slate-100' : 'text-slate-600 dark:text-slate-400'}`}>
+                            {n.title}
+                          </p>
+                          <span className="text-[10px] text-slate-400 shrink-0">
+                            {new Date(n.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-snug">
+                          {n.message}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* User Profile Dropdown */}
         <div className="relative">

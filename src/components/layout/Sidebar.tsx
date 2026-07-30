@@ -162,14 +162,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {isAdmin && (
             <>
               {navSectionHeader('PENGATURAN SISTEM')}
-              {navItem('pengaturan-sistem', 'Margin & Kop Surat', <Settings className="w-4 h-4" />, 'Khusus Admin')}
+              {navItem('pengaturan-sistem', 'Pengaturan Sistem & Akademik', <Settings className="w-4 h-4" />, 'Khusus Admin')}
             </>
           )}
 
           {/* PANDUAN BANTUAN */}
           {navSectionHeader('PANDUAN & BANTUAN')}
           {navItem('panduan-guru', 'Panduan Guru', <HelpCircle className="w-4 h-4" />)}
-          {isAdmin && navItem('panduan-admin', 'Setup Admin', <ShieldAlert className="w-4 h-4" />, 'Guide')}
 
           {/* USER PROFILE & SETTINGS */}
           {navSectionHeader('PENGATURAN')}

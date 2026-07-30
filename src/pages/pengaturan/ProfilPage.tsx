@@ -34,17 +34,39 @@ export const ProfilPage: React.FC = () => {
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validation for NIP / NUPTK
+    const cleanNip = nipNuptk.trim();
+    if (!cleanNip) {
+      showErrorToast('NIP / NUPTK tidak boleh kosong.');
+      return;
+    }
+    if (!/^[\d\s\-]{5,30}$/.test(cleanNip)) {
+      showErrorToast('Format NIP / NUPTK tidak valid. Harus berisi 5 - 30 karakter angka, spasi, atau tanda hubung (-).');
+      return;
+    }
+
+    if (!fullName.trim()) {
+      showErrorToast('Nama Lengkap tidak boleh kosong.');
+      return;
+    }
+
+    if (!email.trim() || !email.includes('@')) {
+      showErrorToast('Format Email Sekolah tidak valid.');
+      return;
+    }
+
     setIsSaving(true);
     const success = await updateProfile({
-      fullName,
-      email,
-      nipNuptk,
-      phone,
+      fullName: fullName.trim(),
+      email: email.trim(),
+      nipNuptk: cleanNip,
+      phone: phone.trim(),
       avatarUrl
     });
     setIsSaving(false);
     if (success) {
-      showSuccessToast('Email Sekolah dan profil berhasil diperbarui.');
+      showSuccessToast('Profil dan NIP / NUPTK berhasil diperbarui ke database.');
     }
   };
 
@@ -118,9 +140,16 @@ export const ProfilPage: React.FC = () => {
               <div>
                 <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{user?.fullName}</h3>
                 <p className="text-xs text-slate-400">{user?.email}</p>
-                <span className="inline-block mt-2 text-[10px] font-extrabold uppercase bg-emerald-500/10 text-emerald-600 px-2.5 py-0.5 rounded-md">
-                  NIP / NUPTK: {user?.nipNuptk || 'Belum diisi'}
-                </span>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">NIP / NUPTK:</span>
+                  <input
+                    type="text"
+                    value={nipNuptk}
+                    onChange={(e) => setNipNuptk(e.target.value)}
+                    placeholder="Masukkan NIP / NUPTK"
+                    className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-[#696cff] focus:ring-2 focus:ring-[#696cff] outline-none"
+                  />
+                </div>
               </div>
             </div>
 

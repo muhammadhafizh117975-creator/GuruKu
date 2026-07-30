@@ -49,7 +49,7 @@ const AppContent: React.FC = () => {
   const renderCurrentPage = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardPage />;
+        return <DashboardPage setActiveTab={setActiveTab} />;
       case 'guru':
         return <GuruPage />;
       case 'mapel':
@@ -84,7 +84,7 @@ const AppContent: React.FC = () => {
       case 'profil':
         return <ProfilPage />;
       default:
-        return <DashboardPage />;
+        return <DashboardPage setActiveTab={setActiveTab} />;
     }
   };
 

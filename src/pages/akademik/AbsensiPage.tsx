@@ -19,6 +19,18 @@ export const AbsensiPage: React.FC = () => {
   const [selectedClassId, setSelectedClassId] = useState<string>(classes[0]?.id || '');
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
+  React.useEffect(() => {
+    if (!selectedSubjectId && subjects.length > 0) {
+      setSelectedSubjectId(subjects[0].id);
+    }
+  }, [subjects, selectedSubjectId]);
+
+  React.useEffect(() => {
+    if (!selectedClassId && classes.length > 0) {
+      setSelectedClassId(classes[0].id);
+    }
+  }, [classes, selectedClassId]);
+
   const classStudents = students.filter((s) => s.classId === selectedClassId);
 
   const [statusMap, setStatusMap] = useState<Record<string, { status: AttendanceStatus; notes: string }>>({});

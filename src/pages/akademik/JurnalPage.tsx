@@ -32,6 +32,18 @@ export const JurnalPage: React.FC = () => {
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [subjectId, setSubjectId] = useState<string>(subjects[0]?.id || '');
   const [classId, setClassId] = useState<string>(classes[0]?.id || '');
+
+  React.useEffect(() => {
+    if (!subjectId && subjects.length > 0) {
+      setSubjectId(subjects[0].id);
+    }
+  }, [subjects, subjectId]);
+
+  React.useEffect(() => {
+    if (!classId && classes.length > 0) {
+      setClassId(classes[0].id);
+    }
+  }, [classes, classId]);
   const [timeSlot, setTimeSlot] = useState<string>('07:30 - 09:00 (Jam 1-2)');
   const [topic, setTopic] = useState<string>('');
   const [method, setMethod] = useState<string>('Problem Based Learning (PBL)');

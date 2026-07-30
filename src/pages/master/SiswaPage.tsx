@@ -36,10 +36,6 @@ export const SiswaPage: React.FC = () => {
   const [nis, setNis] = useState<string>('');
   const [fullName, setFullName] = useState<string>('');
   const [gender, setGender] = useState<'L' | 'P'>('L');
-  const [birthPlace, setBirthPlace] = useState<string>('');
-  const [birthDate, setBirthDate] = useState<string>('');
-  const [address, setAddress] = useState<string>('');
-  const [parentPhone, setParentPhone] = useState<string>('');
   const [classId, setClassId] = useState<string>('');
 
   // Bulk Upload State
@@ -52,10 +48,6 @@ export const SiswaPage: React.FC = () => {
     setNis(`2026${Math.floor(100 + Math.random() * 900)}`);
     setFullName('');
     setGender('L');
-    setBirthPlace('Jakarta');
-    setBirthDate('2012-01-01');
-    setAddress('');
-    setParentPhone('');
     setClassId(classes[0]?.id || '');
     setIsModalOpen(true);
   };
@@ -65,10 +57,6 @@ export const SiswaPage: React.FC = () => {
     setNis(std.nis);
     setFullName(std.fullName);
     setGender(std.gender);
-    setBirthPlace(std.birthPlace);
-    setBirthDate(std.birthDate);
-    setAddress(std.address);
-    setParentPhone(std.parentPhone);
     setClassId(std.classId);
     setIsModalOpen(true);
   };
@@ -89,10 +77,10 @@ export const SiswaPage: React.FC = () => {
         nis,
         fullName,
         gender,
-        birthPlace,
-        birthDate,
-        address,
-        parentPhone,
+        birthPlace: editingStudent.birthPlace || 'Jakarta',
+        birthDate: editingStudent.birthDate || '2012-01-01',
+        address: editingStudent.address || '',
+        parentPhone: editingStudent.parentPhone || '',
         classId
       });
     } else {
@@ -100,10 +88,10 @@ export const SiswaPage: React.FC = () => {
         nis,
         fullName,
         gender,
-        birthPlace,
-        birthDate,
-        address,
-        parentPhone,
+        birthPlace: 'Jakarta',
+        birthDate: '2012-01-01',
+        address: '',
+        parentPhone: '',
         classId
       });
     }
@@ -188,6 +176,9 @@ export const SiswaPage: React.FC = () => {
     }
   };
 
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const itemsPerPage = 10;
+
   const filteredStudents = students.filter((s) => {
     const matchesSearch =
       s.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -196,6 +187,15 @@ export const SiswaPage: React.FC = () => {
     const matchesClass = selectedClassFilter === 'all' || s.classId === selectedClassFilter;
     return matchesSearch && matchesClass;
   });
+
+  // Reset to page 1 on filter/search change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedClassFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedStudents = filteredStudents.slice(startIndex, startIndex + itemsPerPage);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -280,33 +280,28 @@ export const SiswaPage: React.FC = () => {
                 <th className="px-6 py-4">Nama Lengkap Siswa</th>
                 <th className="px-6 py-4">L/P</th>
                 <th className="px-6 py-4">Kelas</th>
-                <th className="px-6 py-4">Tempat, Tgl Lahir</th>
-                <th className="px-6 py-4">No HP Ortu</th>
-                {isAdmin && <th className="px-6 py-4 text-center">Aksi</th>}
+                <th className="px-6 py-4 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-200">
-              {filteredStudents.length === 0 ? (
+              {paginatedStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 7 : 6} className="px-6 py-8 text-center text-slate-400">
+                  <td colSpan={5} className="px-6 py-8 text-center text-slate-400">
                     Tidak ada data siswa ditemukan.
                   </td>
                 </tr>
               ) : (
-                filteredStudents.map((std) => (
+                paginatedStudents.map((std) => (
                   <tr key={std.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                     <td className="px-6 py-4 font-bold text-[#696cff]">{std.nis}</td>
                     <td className="px-6 py-4">
                       <p className="font-bold text-slate-800 dark:text-slate-100">{std.fullName}</p>
-                      <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
-                        <MapPin className="w-3 h-3 inline" /> {std.address || 'Alamat belum diisi'}
-                      </p>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                      <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] ${
                         std.gender === 'L' ? 'bg-sky-500/10 text-sky-600' : 'bg-pink-500/10 text-pink-600'
                       }`}>
-                        {std.gender === 'L' ? 'Laki-laki' : 'Perempuan'}
+                        {std.gender === 'L' ? 'L' : 'P'}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -314,42 +309,60 @@ export const SiswaPage: React.FC = () => {
                         {std.className || 'Tanpa Kelas'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-slate-500">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{std.birthPlace}, {std.birthDate}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-300">
-                      <div className="flex items-center gap-1">
-                        <Phone className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{std.parentPhone || '-'}</span>
-                      </div>
-                    </td>
-                    {isAdmin && (
-                      <td className="px-6 py-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => openEditModal(std)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-[#696cff] hover:bg-[#696cff]/10 transition-colors cursor-pointer"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => openEditModal(std)}
+                          title="Edit Siswa"
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-[#696cff] hover:bg-[#696cff]/10 transition-colors cursor-pointer"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        {isAdmin && (
                           <button
                             onClick={() => handleDelete(std.id, std.fullName)}
+                            title="Hapus Siswa"
                             className="p-1.5 rounded-lg text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
-                        </div>
-                      </td>
-                    )}
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Bar */}
+        {filteredStudents.length > 0 && (
+          <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+            <div>
+              Menampilkan <strong className="text-slate-800 dark:text-slate-200">{filteredStudents.length > 0 ? startIndex + 1 : 0}</strong> - <strong className="text-slate-800 dark:text-slate-200">{Math.min(startIndex + itemsPerPage, filteredStudents.length)}</strong> dari <strong className="text-slate-800 dark:text-slate-200">{filteredStudents.length}</strong> siswa
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Sebelumnya
+              </button>
+              <span className="px-3 py-1.5 rounded-xl bg-[#696cff]/10 text-[#696cff] font-bold">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Selanjutnya
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal Single CRUD Siswa (Admin Only) */}
@@ -390,21 +403,21 @@ export const SiswaPage: React.FC = () => {
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Nama Lengkap Siswa *</label>
-              <input
-                type="text"
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Contoh: Aditya Pratama"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
-              />
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Jenis Kelamin</label>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Nama Lengkap Siswa *</label>
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Contoh: Aditya Pratama"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Jenis Kelamin *</label>
                 <select
                   value={gender}
                   onChange={(e) => setGender(e.target.value as 'L' | 'P')}
@@ -414,48 +427,6 @@ export const SiswaPage: React.FC = () => {
                   <option value="P">Perempuan (P)</option>
                 </select>
               </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tempat Lahir</label>
-                <input
-                  type="text"
-                  value={birthPlace}
-                  onChange={(e) => setBirthPlace(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tanggal Lahir</label>
-                <input
-                  type="date"
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Nomor Telepon / WhatsApp Orang Tua</label>
-              <input
-                type="tel"
-                value={parentPhone}
-                onChange={(e) => setParentPhone(e.target.value)}
-                placeholder="081233445566"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Alamat Tempat Tinggal</label>
-              <textarea
-                rows={2}
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Jl. Merdeka No. 12..."
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
-              />
             </div>
 
             <div className="pt-3 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
@@ -491,7 +462,7 @@ export const SiswaPage: React.FC = () => {
                 <span>Format Data Teks / CSV / Excel (Dipisahkan Tab atau Koma)</span>
               </p>
               <p className="text-amber-700 dark:text-amber-300 text-[11px]">
-                Urutan Kolom: <strong>NIS, Nama Lengkap, Gender(L/P), Tempat Lahir, Tgl Lahir(YYYY-MM-DD), Alamat, No HP Ortu</strong>
+                Urutan Kolom: <strong>NIS, Nama Lengkap, Gender(L/P)</strong>
               </p>
             </div>
 

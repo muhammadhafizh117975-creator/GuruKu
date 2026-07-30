@@ -46,7 +46,7 @@ export const PanduanGuruPage: React.FC = () => {
         'Melihat dan meninjau daftar mata pelajaran yang diampu serta daftar siswa per kelas.',
       steps: [
         'Pilih menu Data Master > Mata Pelajaran untuk melihat ringkasan mapel dan kode mapel.',
-        'Pilih menu Kelas & Tingkat untuk melihat daftar kelas aktif dan wali kelas yang bertugas.',
+        'Pilih menu Kelas & Tingkat untuk melihat daftar kelas aktif dan guru pengampu yang bertugas.',
         'Pilih menu Data Siswa untuk melihat detail nama siswa, NISN, jenis kelamin, serta status keaktifan.'
       ]
     },
@@ -82,7 +82,7 @@ export const PanduanGuruPage: React.FC = () => {
       id: 'cetak',
       category: 'Laporan & Cetak',
       icon: <Printer className="w-5 h-5 text-rose-500" />,
-      title: '5. Mencetak Laporan (Margin & Kop Surat)',
+      title: '5. Mencetak Laporan (Pengaturan Sistem & Akademik)',
       description:
         'Mencetak rekapitulasi nilai, absensi, dan jurnal dengan format rapi beserta kop surat resmi sekolah.',
       steps: [

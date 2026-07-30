@@ -19,6 +19,18 @@ export const NilaiPage: React.FC = () => {
     }
   }, [activeAcademicYear]);
 
+  React.useEffect(() => {
+    if (!selectedSubjectId && subjects.length > 0) {
+      setSelectedSubjectId(subjects[0].id);
+    }
+  }, [subjects, selectedSubjectId]);
+
+  React.useEffect(() => {
+    if (!selectedClassId && classes.length > 0) {
+      setSelectedClassId(classes[0].id);
+    }
+  }, [classes, selectedClassId]);
+
   // Matrix state for inputs
   const classStudents = students.filter((s) => s.classId === selectedClassId);
 
@@ -99,13 +111,22 @@ export const NilaiPage: React.FC = () => {
   const currentSubject = subjects.find((s) => s.id === selectedSubjectId);
   const currentClass = classes.find((c) => c.id === selectedClassId);
 
+  const weights = systemSettings?.gradeWeights || { assignment: 20, daily: 30, pts: 25, pas: 25 };
+  const preds = systemSettings?.predicateThresholds || { aMin: 88, bMin: 78, cMin: 68, kkmDefault: 75 };
+  const totalWeight = (weights.assignment || 20) + (weights.daily || 30) + (weights.pts || 25) + (weights.pas || 25);
+  const divisor = totalWeight > 0 ? totalWeight : 100;
+
   const activeGradesForReport = classStudents.map((std) => {
     const sc = scores[std.id] || { assignmentScore: 80, dailyScore: 80, ptsScore: 80, pasScore: 80, notes: '' };
-    const finalScore = Math.round(sc.assignmentScore * 0.2 + sc.dailyScore * 0.3 + sc.ptsScore * 0.25 + sc.pasScore * 0.25);
+    const rawScore = (sc.assignmentScore * (weights.assignment || 20) +
+                      sc.dailyScore * (weights.daily || 30) +
+                      sc.ptsScore * (weights.pts || 25) +
+                      sc.pasScore * (weights.pas || 25)) / divisor;
+    const finalScore = Math.round(rawScore);
     let predicate: 'A' | 'B' | 'C' | 'D' = 'D';
-    if (finalScore >= 88) predicate = 'A';
-    else if (finalScore >= 78) predicate = 'B';
-    else if (finalScore >= 68) predicate = 'C';
+    if (finalScore >= (preds.aMin || 88)) predicate = 'A';
+    else if (finalScore >= (preds.bMin || 78)) predicate = 'B';
+    else if (finalScore >= (preds.cMin || 68)) predicate = 'C';
 
     return {
       id: `preview_${std.id}`,
@@ -221,10 +242,10 @@ export const NilaiPage: React.FC = () => {
       {/* Formula Info Banner */}
       <div className="p-3.5 rounded-2xl bg-[#696cff]/10 border border-[#696cff]/20 text-xs text-[#696cff] font-medium flex items-center justify-between">
         <span>
-          💡 <strong>Rumus Otomatis:</strong> Nilai Akhir = (Tugas × 20%) + (Harian × 30%) + (PTS × 25%) + (PAS × 25%)
+          💡 <strong>Rumus Otomatis:</strong> Nilai Akhir = (Tugas × {weights.assignment}%) + (Harian × {weights.daily}%) + (PTS × {weights.pts}%) + (PAS × {weights.pas}%)
         </span>
         <span className="font-bold hidden sm:inline">
-          Predikat: A (≥88) | B (≥78) | C (≥68) | D (&lt;68)
+          Predikat: A (≥{preds.aMin}) | B (≥{preds.bMin}) | C (≥{preds.cMin}) | D (&lt;{preds.cMin})
         </span>
       </div>
 
@@ -236,10 +257,10 @@ export const NilaiPage: React.FC = () => {
               <tr>
                 <th className="px-4 py-3.5 w-12 text-center">No</th>
                 <th className="px-4 py-3.5">NIS & Nama Siswa</th>
-                <th className="px-3 py-3.5 w-24 text-center">Tugas (20%)</th>
-                <th className="px-3 py-3.5 w-24 text-center">Harian (30%)</th>
-                <th className="px-3 py-3.5 w-24 text-center">PTS (25%)</th>
-                <th className="px-3 py-3.5 w-24 text-center">PAS (25%)</th>
+                <th className="px-3 py-3.5 w-24 text-center">Tugas ({weights.assignment}%)</th>
+                <th className="px-3 py-3.5 w-24 text-center">Harian ({weights.daily}%)</th>
+                <th className="px-3 py-3.5 w-24 text-center">PTS ({weights.pts}%)</th>
+                <th className="px-3 py-3.5 w-24 text-center">PAS ({weights.pas}%)</th>
                 <th className="px-3 py-3.5 w-28 text-center bg-[#696cff]/5 text-[#696cff]">Nilai Akhir</th>
                 <th className="px-3 py-3.5 w-20 text-center">Predikat</th>
                 <th className="px-4 py-3.5">Catatan Guru</th>
@@ -255,11 +276,15 @@ export const NilaiPage: React.FC = () => {
               ) : (
                 classStudents.map((std, idx) => {
                   const sc = scores[std.id] || { assignmentScore: 80, dailyScore: 80, ptsScore: 80, pasScore: 80, notes: '' };
-                  const finalScore = Math.round(sc.assignmentScore * 0.2 + sc.dailyScore * 0.3 + sc.ptsScore * 0.25 + sc.pasScore * 0.25);
+                  const rawScore = (sc.assignmentScore * (weights.assignment || 20) +
+                                    sc.dailyScore * (weights.daily || 30) +
+                                    sc.ptsScore * (weights.pts || 25) +
+                                    sc.pasScore * (weights.pas || 25)) / divisor;
+                  const finalScore = Math.round(rawScore);
                   let predicate: 'A' | 'B' | 'C' | 'D' = 'D';
-                  if (finalScore >= 88) predicate = 'A';
-                  else if (finalScore >= 78) predicate = 'B';
-                  else if (finalScore >= 68) predicate = 'C';
+                  if (finalScore >= (preds.aMin || 88)) predicate = 'A';
+                  else if (finalScore >= (preds.bMin || 78)) predicate = 'B';
+                  else if (finalScore >= (preds.cMin || 68)) predicate = 'C';
 
                   return (
                     <tr key={std.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">

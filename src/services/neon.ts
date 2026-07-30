@@ -41,6 +41,33 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     institutionName: 'SMP / SMA UNGGULAN GURUKU INDONESIA',
     address: 'Jl. Pendidikan No. 100, Jakarta Pusat 10110'
   },
+  gradeWeights: {
+    assignment: 20,
+    daily: 30,
+    pts: 25,
+    pas: 25
+  },
+  predicateThresholds: {
+    aMin: 88,
+    bMin: 78,
+    cMin: 68,
+    kkmDefault: 75
+  },
+  schoolInfo: {
+    schoolName: 'SMP / SMA UNGGULAN GURUKU INDONESIA',
+    address: 'Jl. Pendidikan No. 100, Jakarta Pusat 10110',
+    email: 'info@guruku.sch.id',
+    phone: '(021) 555-0192',
+    timeZone: 'Asia/Jakarta (WIB)',
+    dateFormat: 'DD/MM/YYYY',
+    academicYearActive: '2025/2026',
+    semesterActive: '1'
+  },
+  documentSettings: {
+    logoUrl: 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=200&auto=format&fit=crop&q=80',
+    digitalSignatureUrl: '',
+    schoolStampUrl: ''
+  },
   googleDriveConnected: true,
   googleDriveFolderName: 'GuruKu_Master_Directory',
   updatedAt: new Date().toISOString()
@@ -88,6 +115,33 @@ export const INITIAL_SYSTEM_SETTINGS: SystemSettings = {
     showInPdf: true,
     institutionName: 'DINAS PENDIDIKAN DAN KEBUDAYAAN SMP NEGERI 1 GURUKU ACADEMIA',
     address: 'Jl. Pendidikan No. 45, Kompleks Akademik, Jakarta Selatan | Telp: (021) 7890123'
+  },
+  gradeWeights: {
+    assignment: 20,
+    daily: 30,
+    pts: 25,
+    pas: 25
+  },
+  predicateThresholds: {
+    aMin: 88,
+    bMin: 78,
+    cMin: 68,
+    kkmDefault: 75
+  },
+  schoolInfo: {
+    schoolName: 'SMP NEGERI 1 GURUKU ACADEMIA',
+    address: 'Jl. Pendidikan No. 45, Kompleks Akademik, Jakarta Selatan',
+    email: 'info@smpn1guruku.sch.id',
+    phone: '(021) 7890123',
+    timeZone: 'Asia/Jakarta (WIB)',
+    dateFormat: 'DD/MM/YYYY',
+    academicYearActive: '2025/2026',
+    semesterActive: '1'
+  },
+  documentSettings: {
+    logoUrl: 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=200&auto=format&fit=crop&q=80',
+    digitalSignatureUrl: '',
+    schoolStampUrl: ''
   },
   googleDriveConnected: true,
   googleDriveFolderName: 'GuruKu_Storage',

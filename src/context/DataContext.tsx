@@ -10,7 +10,8 @@ import {
   TeachingJournal,
   TeachingModule,
   SystemSettings,
-  ActivityLog
+  ActivityLog,
+  NotificationItem
 } from '../types';
 import {
   INITIAL_ACADEMIC_YEARS,
@@ -34,9 +35,14 @@ interface DataContextType {
   modules: TeachingModule[];
   systemSettings: SystemSettings;
   activityLogs: ActivityLog[];
+  notifications: NotificationItem[];
+  unreadCount: number;
   isRealtimeConnected: boolean;
 
   // Actions
+  markNotificationAsRead: (id: string) => Promise<void>;
+  markAllNotificationsAsRead: () => Promise<void>;
+  addNotification: (notif: { title: string; message: string; type?: 'info' | 'success' | 'warning' | 'error'; userId?: string }) => Promise<void>;
   addAcademicYear: (ay: Omit<AcademicYearItem, 'id' | 'createdAt'>) => Promise<void>;
   updateAcademicYear: (id: string, ay: Partial<AcademicYearItem>) => Promise<void>;
   setActiveAcademicYear: (id: string) => Promise<void>;
@@ -71,6 +77,7 @@ interface DataContextType {
   deleteModule: (id: string) => Promise<void>;
 
   updateSystemSettings: (settings: Partial<SystemSettings>) => Promise<void>;
+  assignTeacherToSubjectsAndClasses: (teacherId: string, subjectIds: string[], classIds: string[]) => Promise<void>;
   logActivity: (action: string, details: string) => void;
   resetAllData: () => void;
 }
@@ -92,7 +99,89 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [modules, setModules] = useState<TeachingModule[]>([]);
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(INITIAL_SYSTEM_SETTINGS);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([
+    {
+      id: 'notif_init_1',
+      title: 'Sistem Terhubung ke Supabase',
+      message: 'Database Supabase & Realtime aktif. Data siswa, nilai, presensi, dan jurnal tersinkron terpusat.',
+      type: 'success',
+      isRead: false,
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 'notif_init_2',
+      title: 'Tahun Pelajaran 2025/2026 Aktif',
+      message: 'Tahun Pelajaran 2025/2026 Semester 1 diaktifkan sebagai acuan nilai dan presensi harian.',
+      type: 'info',
+      isRead: false,
+      createdAt: new Date(Date.now() - 3600000).toISOString()
+    }
+  ]);
   const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(false);
+
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  const markNotificationAsRead = useCallback(async (id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+    );
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        await client.from('notifications').update({ is_read: true }).eq('id', id);
+      } catch (e) {
+        console.warn('Failed updating notification in Supabase:', e);
+      }
+    }
+  }, []);
+
+  const markAllNotificationsAsRead = useCallback(async () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        await client.from('notifications').update({ is_read: true }).eq('is_read', false);
+      } catch (e) {
+        console.warn('Failed marking all notifications read in Supabase:', e);
+      }
+    }
+  }, []);
+
+  const addNotification = useCallback(
+    async (notif: { title: string; message: string; type?: 'info' | 'success' | 'warning' | 'error'; userId?: string }) => {
+      const newNotif: NotificationItem = {
+        id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        userId: notif.userId,
+        title: notif.title,
+        message: notif.message,
+        type: notif.type || 'info',
+        isRead: false,
+        createdAt: new Date().toISOString()
+      };
+
+      setNotifications((prev) => [newNotif, ...prev]);
+
+      const client = getSupabaseClient();
+      if (client) {
+        try {
+          await client.from('notifications').insert([
+            {
+              id: newNotif.id,
+              user_id: newNotif.userId || null,
+              title: newNotif.title,
+              message: newNotif.message,
+              type: newNotif.type,
+              is_read: false,
+              created_at: newNotif.createdAt
+            }
+          ]);
+        } catch (e) {
+          console.warn('Failed inserting notification in Supabase:', e);
+        }
+      }
+    },
+    []
+  );
 
   const activeAcademicYear = academicYears.find((ay) => ay.isActive) || academicYears[0] || {
     id: 'ay_default',
@@ -343,6 +432,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setModules(fetchedModules);
       } else if (modErr) {
         console.warn('[Supabase DB Sync Error] Failed fetching teaching_modules:', modErr);
+      }
+
+      // 10. Notifications
+      const { data: notifData, error: notifErr } = await client
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!notifErr && notifData && notifData.length > 0) {
+        setNotifications(
+          notifData.map((n: any) => ({
+            id: n.id,
+            userId: n.user_id || undefined,
+            title: n.title,
+            message: n.message,
+            type: n.type || 'info',
+            isRead: Boolean(n.is_read),
+            createdAt: n.created_at || new Date().toISOString()
+          }))
+        );
       }
     } catch (err) {
       console.error('[Supabase DB Sync Critical Error] Failed to load database state:', err);
@@ -872,11 +981,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Grade Actions
   const calculateGradeDetails = (tugas: number, harian: number, pts: number, pas: number) => {
-    const finalScore = Math.round(tugas * 0.2 + harian * 0.3 + pts * 0.25 + pas * 0.25);
+    const weights = systemSettings?.gradeWeights || { assignment: 20, daily: 30, pts: 25, pas: 25 };
+    const preds = systemSettings?.predicateThresholds || { aMin: 88, bMin: 78, cMin: 68, kkmDefault: 75 };
+
+    const totalWeight = (weights.assignment || 20) + (weights.daily || 30) + (weights.pts || 25) + (weights.pas || 25);
+    const divisor = totalWeight > 0 ? totalWeight : 100;
+
+    const rawScore = (tugas * (weights.assignment || 20) + harian * (weights.daily || 30) + pts * (weights.pts || 25) + pas * (weights.pas || 25)) / divisor;
+    const finalScore = Math.round(rawScore);
+
     let predicate: 'A' | 'B' | 'C' | 'D' = 'D';
-    if (finalScore >= 88) predicate = 'A';
-    else if (finalScore >= 78) predicate = 'B';
-    else if (finalScore >= 68) predicate = 'C';
+    if (finalScore >= (preds.aMin || 88)) predicate = 'A';
+    else if (finalScore >= (preds.bMin || 78)) predicate = 'B';
+    else if (finalScore >= (preds.cMin || 68)) predicate = 'C';
     else predicate = 'D';
 
     return { finalScore, predicate };
@@ -1158,6 +1275,51 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Assign Teacher to Subjects and Classes
+  const assignTeacherToSubjectsAndClasses = async (
+    teacherId: string,
+    subjectIds: string[],
+    classIds: string[]
+  ) => {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi Supabase tidak tersedia.');
+      return;
+    }
+
+    try {
+      // 1. Update subjects
+      for (const subj of subjects) {
+        let currentIds = subj.teacherIds || [];
+        const isAssigned = subjectIds.includes(subj.id);
+        if (isAssigned && !currentIds.includes(teacherId)) {
+          const nextIds = [...currentIds, teacherId];
+          await client.from('subjects').update({ teacher_ids: nextIds }).eq('id', subj.id);
+        } else if (!isAssigned && currentIds.includes(teacherId)) {
+          const nextIds = currentIds.filter((id) => id !== teacherId);
+          await client.from('subjects').update({ teacher_ids: nextIds }).eq('id', subj.id);
+        }
+      }
+
+      // 2. Update classes
+      for (const cls of classes) {
+        const isAssigned = classIds.includes(cls.id);
+        if (isAssigned && cls.homeroomTeacherId !== teacherId) {
+          await client.from('classes').update({ homeroom_teacher_id: teacherId }).eq('id', cls.id);
+        } else if (!isAssigned && cls.homeroomTeacherId === teacherId) {
+          await client.from('classes').update({ homeroom_teacher_id: null }).eq('id', cls.id);
+        }
+      }
+
+      await loadDataFromSupabase();
+      logActivity('PENUGASAN_GURU', `Memperbarui penugasan mata pelajaran dan kelas untuk guru`);
+      showSuccessToast('Penugasan guru berhasil disimpan.');
+    } catch (err: any) {
+      console.error('Failed assignTeacherToSubjectsAndClasses:', err);
+      showErrorToast(`Gagal memperbarui penugasan guru: ${err.message || err}`);
+    }
+  };
+
   // Reset local state to empty
   const resetAllData = () => {
     setTeachers([]);
@@ -1174,22 +1336,64 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     showSuccessToast('Seluruh data aplikasi di layar berhasil dibersihkan.');
   };
 
+  // Role-Based Data Isolation Filtering (Backend/Provider Level Isolation)
+  const isGuru = user?.role === 'guru';
+
+  // Calculate assigned subjects and classes for logged-in teacher
+  const assignedSubjects = isGuru
+    ? subjects.filter((s) => s.teacherIds?.includes(user?.id || ''))
+    : subjects;
+  const assignedSubjectIds = new Set(assignedSubjects.map((s) => s.id));
+
+  const assignedClasses = isGuru
+    ? classes.filter((c) => c.homeroomTeacherId === user?.id)
+    : classes;
+  const assignedClassIds = new Set(assignedClasses.map((c) => c.id));
+
+  // Filtered collections for Guru vs Admin
+  const visibleSubjects = assignedSubjects;
+  const visibleClasses = assignedClasses;
+  const visibleStudents = isGuru
+    ? students.filter((st) => assignedClassIds.has(st.classId))
+    : students;
+  const visibleGrades = isGuru
+    ? grades.filter(
+        (g) =>
+          g.teacherId === user?.id ||
+          (assignedClassIds.has(g.classId) && assignedSubjectIds.has(g.subjectId))
+      )
+    : grades;
+  const visibleAttendance = isGuru
+    ? attendance.filter((a) => a.teacherId === user?.id || assignedClassIds.has(a.classId))
+    : attendance;
+  const visibleJournals = isGuru
+    ? journals.filter((j) => j.teacherId === user?.id || assignedClassIds.has(j.classId))
+    : journals;
+  const visibleModules = isGuru
+    ? modules.filter((m) => m.teacherId === user?.id || assignedSubjectIds.has(m.subjectId))
+    : modules;
+
   return (
     <DataContext.Provider
       value={{
         academicYears,
         activeAcademicYear,
         teachers,
-        subjects,
-        classes,
-        students,
-        grades,
-        attendance,
-        journals,
-        modules,
+        subjects: visibleSubjects,
+        classes: visibleClasses,
+        students: visibleStudents,
+        grades: visibleGrades,
+        attendance: visibleAttendance,
+        journals: visibleJournals,
+        modules: visibleModules,
         systemSettings,
         activityLogs,
+        notifications,
+        unreadCount,
         isRealtimeConnected,
+        markNotificationAsRead,
+        markAllNotificationsAsRead,
+        addNotification,
         addAcademicYear,
         updateAcademicYear,
         setActiveAcademicYear,
@@ -1215,6 +1419,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addModule,
         deleteModule,
         updateSystemSettings,
+        assignTeacherToSubjectsAndClasses,
         logActivity,
         resetAllData
       }}

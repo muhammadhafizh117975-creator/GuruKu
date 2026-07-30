@@ -25,7 +25,7 @@ import {
 
 export const GuruPage: React.FC = () => {
   const { user, registerGuru, adminResetPasswordGuru } = useAuth();
-  const { teachers, addTeacher, updateTeacher, deleteTeacher, subjects } = useData();
+  const { teachers, addTeacher, updateTeacher, deleteTeacher, subjects, classes, assignTeacherToSubjectsAndClasses } = useData();
 
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -44,6 +44,11 @@ export const GuruPage: React.FC = () => {
   const [editEmail, setEditEmail] = useState<string>('');
   const [editNipNuptk, setEditNipNuptk] = useState<string>('');
   const [editPhone, setEditPhone] = useState<string>('');
+
+  // Assign Teacher Modal State
+  const [assigningTeacher, setAssigningTeacher] = useState<Profile | null>(null);
+  const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
 
   // View Credentials Modal State
   const [viewingCredentialsTeacher, setViewingCredentialsTeacher] = useState<Profile | null>(null);
@@ -162,6 +167,21 @@ Password: ${createdGuruInfo.password}`;
     setNewPassword('guru123');
   };
 
+  const handleOpenAssignModal = (teacher: Profile) => {
+    setAssigningTeacher(teacher);
+    const currSubjIds = subjects.filter((s) => s.teacherIds?.includes(teacher.id)).map((s) => s.id);
+    const currClassIds = classes.filter((c) => c.homeroomTeacherId === teacher.id).map((c) => c.id);
+    setSelectedSubjectIds(currSubjIds);
+    setSelectedClassIds(currClassIds);
+  };
+
+  const handleSaveAssignments = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assigningTeacher) return;
+    await assignTeacherToSubjectsAndClasses(assigningTeacher.id, selectedSubjectIds, selectedClassIds);
+    setAssigningTeacher(null);
+  };
+
   const handleConfirmResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetModalTeacher || !newPassword) return;
@@ -222,6 +242,7 @@ Password: ${createdGuruInfo.password}`;
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredTeachers.map((teacher) => {
           const assignedMapel = subjects.filter((s) => s.teacherIds?.includes(teacher.id));
+          const assignedKelas = classes.filter((c) => c.homeroomTeacherId === teacher.id);
 
           return (
             <div
@@ -272,13 +293,30 @@ Password: ${createdGuruInfo.password}`;
                       )}
                     </div>
                   </div>
+                  <div className="flex items-start gap-2 pt-1">
+                    <Users className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                    <div className="flex flex-wrap gap-1">
+                      {assignedKelas.length === 0 ? (
+                        <span className="text-[10px] text-slate-400">Belum diampu kelas</span>
+                      ) : (
+                        assignedKelas.map((c) => (
+                          <span key={c.id} className="text-[10px] bg-emerald-500/10 text-emerald-600 font-semibold px-2 py-0.5 rounded-full">
+                            Kelas {c.name}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <div className="mt-5 border-t border-slate-100 dark:border-slate-800 pt-3 flex items-center justify-between gap-2">
-                <span className="text-[10px] bg-emerald-500/10 text-emerald-600 font-bold px-2.5 py-1 rounded-full shrink-0">
-                  Aktif
-                </span>
+                <button
+                  onClick={() => handleOpenAssignModal(teacher)}
+                  className="px-2.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 hover:bg-[#696cff] text-[#696cff] hover:text-white text-xs font-bold transition-all cursor-pointer"
+                >
+                  Penugasan
+                </button>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() => {
@@ -722,6 +760,113 @@ Password: ${createdGuruInfo.password}`;
               </button>
             </div>
           </div>
+        )}
+      </Modal>
+
+      {/* Modal Penugasan Guru (Mata Pelajaran & Kelas) */}
+      <Modal
+        isOpen={!!assigningTeacher}
+        onClose={() => setAssigningTeacher(null)}
+        title="Penugasan Mengajar Guru"
+        subtitle={assigningTeacher ? `Tentukan Mata Pelajaran dan Kelas yang diampu oleh ${assigningTeacher.fullName}` : ''}
+      >
+        {assigningTeacher && (
+          <form onSubmit={handleSaveAssignments} className="space-y-5">
+            <div className="p-3 bg-indigo-50/80 dark:bg-indigo-950/40 rounded-2xl border border-indigo-200 dark:border-indigo-800 text-xs text-indigo-900 dark:text-indigo-200 space-y-1">
+              <p className="font-bold">{assigningTeacher.fullName}</p>
+              <p className="text-[11px] opacity-80">
+                Data di aplikasi (Siswa, Nilai, Presensi, Jurnal, Modul Ajar) untuk akun Guru ini akan otomatis dibatasi (data isolation) sesuai penugasan di bawah ini.
+              </p>
+            </div>
+
+            {/* Select Subjects */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                Mata Pelajaran yang Diampu
+              </label>
+              <div className="max-h-40 overflow-y-auto space-y-1.5 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                {subjects.length === 0 ? (
+                  <p className="text-xs text-slate-400">Belum ada data mata pelajaran.</p>
+                ) : (
+                  subjects.map((s) => {
+                    const isChecked = selectedSubjectIds.includes(s.id);
+                    return (
+                      <label
+                        key={s.id}
+                        className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors cursor-pointer text-xs font-medium text-slate-700 dark:text-slate-200"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedSubjectIds([...selectedSubjectIds, s.id]);
+                            } else {
+                              setSelectedSubjectIds(selectedSubjectIds.filter((id) => id !== s.id));
+                            }
+                          }}
+                          className="w-4 h-4 rounded-md text-[#696cff] focus:ring-[#696cff]"
+                        />
+                        <span>{s.code} - <strong>{s.name}</strong></span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Select Classes */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                Kelas / Rombongan Belajar yang Diampu
+              </label>
+              <div className="max-h-40 overflow-y-auto space-y-1.5 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                {classes.length === 0 ? (
+                  <p className="text-xs text-slate-400">Belum ada data kelas.</p>
+                ) : (
+                  classes.map((c) => {
+                    const isChecked = selectedClassIds.includes(c.id);
+                    return (
+                      <label
+                        key={c.id}
+                        className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors cursor-pointer text-xs font-medium text-slate-700 dark:text-slate-200"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedClassIds([...selectedClassIds, c.id]);
+                            } else {
+                              setSelectedClassIds(selectedClassIds.filter((id) => id !== c.id));
+                            }
+                          }}
+                          className="w-4 h-4 rounded-md text-[#696cff] focus:ring-[#696cff]"
+                        />
+                        <span><strong>Kelas {c.name}</strong> (Tingkat {c.gradeLevel} - {c.academicYear})</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="pt-3 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setAssigningTeacher(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-200 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2.5 rounded-xl bg-[#696cff] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 hover:bg-[#5f61e6] cursor-pointer"
+              >
+                Simpan Penugasan Guru
+              </button>
+            </div>
+          </form>
         )}
       </Modal>
     </div>
