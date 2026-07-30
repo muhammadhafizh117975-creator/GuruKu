@@ -214,23 +214,210 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     window.addEventListener('storage', handleStorageChange);
 
-    // 2. Supabase Realtime Listener
+    // 2. Supabase Realtime Listener & Initial Sync
     const supabase = getSupabaseClient();
     let channel: any = null;
 
+    const loadDataFromSupabase = async () => {
+      const client = getSupabaseClient();
+      if (!client) return;
+
+      try {
+        // Profiles (Guru)
+        const { data: profs } = await client.from('profiles').select('*');
+        if (profs && profs.length > 0) {
+          const guruList: Profile[] = profs
+            .filter((p: any) => p.role === 'guru')
+            .map((p: any) => ({
+              id: p.id,
+              email: p.email,
+              username: p.username,
+              password: p.password,
+              fullName: p.full_name,
+              role: p.role,
+              nipNuptk: p.nip_nuptk,
+              phone: p.phone,
+              avatarUrl: p.avatar_url,
+              createdAt: p.created_at,
+              updatedAt: p.updated_at
+            }));
+          if (guruList.length > 0) setTeachers(guruList);
+        }
+
+        // Classes
+        const { data: clsData } = await client.from('classes').select('*');
+        let fetchedClasses: ClassRoom[] = [];
+        if (clsData && clsData.length > 0) {
+          fetchedClasses = clsData.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            gradeLevel: c.grade_level,
+            academicYear: c.academic_year,
+            homeroomTeacherId: c.homeroom_teacher_id,
+            createdAt: c.created_at
+          }));
+          setClasses(fetchedClasses);
+        }
+
+        // Subjects
+        const { data: sbjData } = await client.from('subjects').select('*');
+        if (sbjData && sbjData.length > 0) {
+          const mappedSbj: Subject[] = sbjData.map((s: any) => ({
+            id: s.id,
+            code: s.code,
+            name: s.name,
+            description: s.description,
+            teacherIds: s.teacher_ids || [],
+            createdAt: s.created_at
+          }));
+          setSubjects(mappedSbj);
+        }
+
+        // Students
+        const { data: stdData } = await client.from('students').select('*');
+        if (stdData && stdData.length > 0) {
+          const mappedStd: Student[] = stdData.map((s: any) => {
+            const cls = fetchedClasses.find((c) => c.id === s.class_id);
+            return {
+              id: s.id,
+              nis: s.nis,
+              fullName: s.full_name,
+              gender: s.gender,
+              birthPlace: s.birth_place,
+              birthDate: s.birth_date,
+              address: s.address,
+              parentPhone: s.parent_phone,
+              classId: s.class_id || '',
+              className: cls ? cls.name : 'Belum Ada Kelas',
+              createdAt: s.created_at
+            };
+          });
+          setStudents(mappedStd);
+        }
+
+        // Grades
+        const { data: grdData } = await client.from('grades').select('*');
+        if (grdData && grdData.length > 0) {
+          const mappedGrd: Grade[] = grdData.map((g: any) => ({
+            id: g.id,
+            studentId: g.student_id,
+            studentName: '',
+            studentNis: '',
+            subjectId: g.subject_id,
+            subjectName: '',
+            classId: g.class_id,
+            className: '',
+            teacherId: g.teacher_id,
+            assignmentScore: Number(g.assignment_score || 0),
+            dailyScore: Number(g.daily_score || 0),
+            ptsScore: Number(g.pts_score || 0),
+            pasScore: Number(g.pas_score || 0),
+            finalScore: Number(g.final_score || 0),
+            predicate: g.predicate || 'D',
+            notes: g.notes || '',
+            academicYear: g.academic_year,
+            semester: g.semester,
+            updatedAt: g.updated_at
+          }));
+          setGrades(mappedGrd);
+        }
+
+        // Attendance
+        const { data: attData } = await client.from('attendance').select('*');
+        if (attData && attData.length > 0) {
+          const mappedAtt: Attendance[] = attData.map((a: any) => ({
+            id: a.id,
+            date: a.date,
+            studentId: a.student_id,
+            classId: a.class_id,
+            subjectId: a.subject_id,
+            teacherId: a.teacher_id,
+            status: a.status,
+            notes: a.notes,
+            createdAt: a.created_at
+          }));
+          setAttendance(mappedAtt);
+        }
+
+        // Teaching Journals
+        const { data: jrnData } = await client.from('teaching_journals').select('*');
+        if (jrnData && jrnData.length > 0) {
+          const mappedJrn: TeachingJournal[] = jrnData.map((j: any) => ({
+            id: j.id,
+            date: j.date,
+            subjectId: j.subject_id,
+            classId: j.class_id,
+            teacherId: j.teacher_id,
+            timeSlot: j.time_slot,
+            topic: j.topic,
+            method: j.method,
+            attendeeCount: j.attendee_count,
+            notes: j.notes,
+            attachmentName: j.attachment_name,
+            attachmentDriveId: j.attachment_drive_id,
+            attachmentWebViewLink: j.attachment_web_view_link,
+            attachmentWebContentLink: j.attachment_web_content_link,
+            createdAt: j.created_at
+          }));
+          setJournals(mappedJrn);
+        }
+
+        // Teaching Modules
+        const { data: modData } = await client.from('teaching_modules').select('*');
+        if (modData && modData.length > 0) {
+          const mappedMod: TeachingModule[] = modData.map((m: any) => ({
+            id: m.id,
+            title: m.title,
+            subjectId: m.subject_id,
+            classLevel: m.class_level,
+            semester: m.semester,
+            academicYear: m.academic_year,
+            description: m.description,
+            fileType: m.file_type,
+            fileName: m.file_name,
+            fileSize: m.file_size,
+            fileDriveId: m.file_drive_id,
+            webViewLink: m.web_view_link,
+            webContentLink: m.web_content_link,
+            teacherId: m.teacher_id,
+            createdAt: m.created_at
+          }));
+          setModules(mappedMod);
+        }
+      } catch (err) {
+        console.warn('Error loading Supabase initial data:', err);
+      }
+    };
+
     if (supabase) {
       setIsRealtimeConnected(true);
+      loadDataFromSupabase();
 
       channel = supabase
         .channel('schema-db-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => {
+          loadDataFromSupabase();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, () => {
+          loadDataFromSupabase();
+        })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'subjects' }, () => {
-          setIsRealtimeConnected(true);
+          loadDataFromSupabase();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+          loadDataFromSupabase();
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'grades' }, () => {
-          setIsRealtimeConnected(true);
+          loadDataFromSupabase();
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'system_settings' }, () => {
-          setIsRealtimeConnected(true);
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, () => {
+          loadDataFromSupabase();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'teaching_journals' }, () => {
+          loadDataFromSupabase();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'teaching_modules' }, () => {
+          loadDataFromSupabase();
         })
         .subscribe((status: string) => {
           if (status === 'SUBSCRIBED') {
@@ -238,7 +425,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         });
     } else {
-      setIsRealtimeConnected(true); // Always active with local broadcast & local storage sync
+      setIsRealtimeConnected(true);
     }
 
     return () => {
@@ -487,18 +674,55 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: new Date().toISOString()
     };
     setSubjects((prev) => [newSubj, ...prev]);
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from('subjects').insert([{
+        id: newSubj.id,
+        code: newSubj.code,
+        name: newSubj.name,
+        description: newSubj.description || '',
+        teacher_ids: newSubj.teacherIds || [],
+        created_at: newSubj.createdAt
+      }]).then(({ error }: any) => {
+        if (error) console.warn('Supabase add subject error:', error);
+      });
+    }
+
     logActivity('TAMBAH_MATA_PELAJARAN', `Menambahkan mata pelajaran ${newSubj.name}`);
     showSuccessToast('Mata Pelajaran berhasil ditambahkan.');
   };
 
   const updateSubject = (id: string, updated: Partial<Subject>) => {
     setSubjects((prev) => prev.map((s) => (s.id === id ? { ...s, ...updated } : s)));
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const payload: any = {};
+      if (updated.code) payload.code = updated.code;
+      if (updated.name) payload.name = updated.name;
+      if (updated.description !== undefined) payload.description = updated.description;
+      if (updated.teacherIds) payload.teacher_ids = updated.teacherIds;
+      
+      supabase.from('subjects').update(payload).eq('id', id).then(({ error }: any) => {
+        if (error) console.warn('Supabase update subject error:', error);
+      });
+    }
+
     logActivity('UBAH_MATA_PELAJARAN', `Memperbarui data mata pelajaran`);
     showSuccessToast('Mata Pelajaran berhasil diperbarui.');
   };
 
   const deleteSubject = (id: string) => {
     setSubjects((prev) => prev.filter((s) => s.id !== id));
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from('subjects').delete().eq('id', id).then(({ error }: any) => {
+        if (error) console.warn('Supabase delete subject error:', error);
+      });
+    }
+
     logActivity('HAPUS_MATA_PELAJARAN', `Menghapus mata pelajaran`);
     showSuccessToast('Mata Pelajaran berhasil dihapus.');
   };
@@ -510,18 +734,55 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: new Date().toISOString()
     };
     setClasses((prev) => [newCls, ...prev]);
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from('classes').insert([{
+        id: newCls.id,
+        name: newCls.name,
+        grade_level: newCls.gradeLevel,
+        academic_year: newCls.academicYear,
+        homeroom_teacher_id: newCls.homeroomTeacherId || null,
+        created_at: newCls.createdAt
+      }]).then(({ error }: any) => {
+        if (error) console.warn('Supabase add class error:', error);
+      });
+    }
+
     logActivity('TAMBAH_KELAS', `Menambahkan kelas ${newCls.name}`);
     showSuccessToast('Kelas berhasil ditambahkan.');
   };
 
   const updateClass = (id: string, updated: Partial<ClassRoom>) => {
     setClasses((prev) => prev.map((c) => (c.id === id ? { ...c, ...updated } : c)));
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const payload: any = {};
+      if (updated.name) payload.name = updated.name;
+      if (updated.gradeLevel) payload.grade_level = updated.gradeLevel;
+      if (updated.academicYear) payload.academic_year = updated.academicYear;
+      if (updated.homeroomTeacherId !== undefined) payload.homeroom_teacher_id = updated.homeroomTeacherId || null;
+
+      supabase.from('classes').update(payload).eq('id', id).then(({ error }: any) => {
+        if (error) console.warn('Supabase update class error:', error);
+      });
+    }
+
     logActivity('UBAH_KELAS', `Memperbarui data kelas`);
     showSuccessToast('Kelas berhasil diperbarui.');
   };
 
   const deleteClass = (id: string) => {
     setClasses((prev) => prev.filter((c) => c.id !== id));
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from('classes').delete().eq('id', id).then(({ error }: any) => {
+        if (error) console.warn('Supabase delete class error:', error);
+      });
+    }
+
     logActivity('HAPUS_KELAS', `Menghapus kelas`);
     showSuccessToast('Kelas berhasil dihapus.');
   };
@@ -535,6 +796,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: new Date().toISOString()
     };
     setStudents((prev) => [newStd, ...prev]);
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from('students').insert([{
+        id: newStd.id,
+        nis: newStd.nis,
+        full_name: newStd.fullName,
+        gender: newStd.gender,
+        birth_place: newStd.birthPlace || '',
+        birth_date: newStd.birthDate || null,
+        address: newStd.address || '',
+        parent_phone: newStd.parentPhone || '',
+        class_id: newStd.classId || null,
+        created_at: newStd.createdAt
+      }]).then(({ error }: any) => {
+        if (error) console.warn('Supabase add student error:', error);
+      });
+    }
+
     logActivity('TAMBAH_SISWA', `Menambahkan siswa ${newStd.fullName}`);
     showSuccessToast('Siswa berhasil ditambahkan.');
   };
@@ -553,6 +833,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     setStudents((prev) => [...newStudents, ...prev]);
+
+    const supabase = getSupabaseClient();
+    if (supabase && newStudents.length > 0) {
+      const payload = newStudents.map((std) => ({
+        id: std.id,
+        nis: std.nis,
+        full_name: std.fullName,
+        gender: std.gender,
+        birth_place: std.birthPlace || '',
+        birth_date: std.birthDate || null,
+        address: std.address || '',
+        parent_phone: std.parentPhone || '',
+        class_id: std.classId || null,
+        created_at: std.createdAt
+      }));
+
+      supabase.from('students').insert(payload).then(({ error }: any) => {
+        if (error) console.warn('Supabase bulk add students error:', error);
+      });
+    }
+
     logActivity('BULK_UPLOAD_SISWA', `Berhasil mengunggah ${newStudents.length} data siswa baru`);
     showSuccessToast(`Berhasil mengimpor ${newStudents.length} data siswa baru.`);
   };
@@ -570,12 +871,38 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           : s
       )
     );
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const payload: any = {};
+      if (updated.nis) payload.nis = updated.nis;
+      if (updated.fullName) payload.full_name = updated.fullName;
+      if (updated.gender) payload.gender = updated.gender;
+      if (updated.birthPlace !== undefined) payload.birth_place = updated.birthPlace;
+      if (updated.birthDate !== undefined) payload.birth_date = updated.birthDate || null;
+      if (updated.address !== undefined) payload.address = updated.address;
+      if (updated.parentPhone !== undefined) payload.parent_phone = updated.parentPhone;
+      if (updated.classId !== undefined) payload.class_id = updated.classId || null;
+
+      supabase.from('students').update(payload).eq('id', id).then(({ error }: any) => {
+        if (error) console.warn('Supabase update student error:', error);
+      });
+    }
+
     logActivity('UBAH_SISWA', `Memperbarui data siswa`);
     showSuccessToast('Data siswa berhasil diperbarui.');
   };
 
   const deleteStudent = (id: string) => {
     setStudents((prev) => prev.filter((s) => s.id !== id));
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from('students').delete().eq('id', id).then(({ error }: any) => {
+        if (error) console.warn('Supabase delete student error:', error);
+      });
+    }
+
     logActivity('HAPUS_SISWA', `Menghapus siswa`);
     showSuccessToast('Data siswa berhasil dihapus.');
   };

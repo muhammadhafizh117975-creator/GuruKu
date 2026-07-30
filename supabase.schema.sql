@@ -42,7 +42,7 @@ ON CONFLICT (id) DO NOTHING;
 
 -- 4. TABEL SUBJECTS (MATA PELAJARAN)
 CREATE TABLE public.subjects (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   code TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL,
   description TEXT,
@@ -52,7 +52,7 @@ CREATE TABLE public.subjects (
 
 -- 5. TABEL CLASSES (KELAS & TINGKATAN)
 CREATE TABLE public.classes (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   name TEXT NOT NULL,
   grade_level TEXT NOT NULL,
   academic_year TEXT NOT NULL,
@@ -62,7 +62,7 @@ CREATE TABLE public.classes (
 
 -- 6. TABEL STUDENTS (DATA SISWA)
 CREATE TABLE public.students (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   nis TEXT UNIQUE NOT NULL,
   full_name TEXT NOT NULL,
   gender CHAR(1) CHECK (gender IN ('L', 'P')),
@@ -70,16 +70,16 @@ CREATE TABLE public.students (
   birth_date DATE,
   address TEXT,
   parent_phone TEXT,
-  class_id UUID REFERENCES public.classes(id) ON DELETE CASCADE,
+  class_id TEXT REFERENCES public.classes(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 7. TABEL GRADES (NILAI SISWA)
 CREATE TABLE public.grades (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
-  subject_id UUID REFERENCES public.subjects(id) ON DELETE CASCADE,
-  class_id UUID REFERENCES public.classes(id) ON DELETE CASCADE,
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  student_id TEXT REFERENCES public.students(id) ON DELETE CASCADE,
+  subject_id TEXT REFERENCES public.subjects(id) ON DELETE CASCADE,
+  class_id TEXT REFERENCES public.classes(id) ON DELETE CASCADE,
   teacher_id TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
   assignment_score NUMERIC DEFAULT 0,
   daily_score NUMERIC DEFAULT 0,
@@ -95,11 +95,11 @@ CREATE TABLE public.grades (
 
 -- 8. TABEL ATTENDANCE (PRESENSI / ABSENSI SISWA)
 CREATE TABLE public.attendance (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   date DATE NOT NULL,
-  student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
-  class_id UUID REFERENCES public.classes(id) ON DELETE CASCADE,
-  subject_id UUID REFERENCES public.subjects(id) ON DELETE CASCADE,
+  student_id TEXT REFERENCES public.students(id) ON DELETE CASCADE,
+  class_id TEXT REFERENCES public.classes(id) ON DELETE CASCADE,
+  subject_id TEXT REFERENCES public.subjects(id) ON DELETE CASCADE,
   teacher_id TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
   status TEXT CHECK (status IN ('Hadir', 'Izin', 'Sakit', 'Alfa')),
   notes TEXT,
@@ -108,10 +108,10 @@ CREATE TABLE public.attendance (
 
 -- 9. TABEL TEACHING_JOURNALS (JURNAL MENGAJAR GURU)
 CREATE TABLE public.teaching_journals (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   date DATE NOT NULL,
-  subject_id UUID REFERENCES public.subjects(id) ON DELETE CASCADE,
-  class_id UUID REFERENCES public.classes(id) ON DELETE CASCADE,
+  subject_id TEXT REFERENCES public.subjects(id) ON DELETE CASCADE,
+  class_id TEXT REFERENCES public.classes(id) ON DELETE CASCADE,
   teacher_id TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
   time_slot TEXT NOT NULL,
   topic TEXT NOT NULL,
@@ -127,9 +127,9 @@ CREATE TABLE public.teaching_journals (
 
 -- 10. TABEL TEACHING_MODULES (ARSIP MODUL AJAR / RPP)
 CREATE TABLE public.teaching_modules (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   title TEXT NOT NULL,
-  subject_id UUID REFERENCES public.subjects(id) ON DELETE CASCADE,
+  subject_id TEXT REFERENCES public.subjects(id) ON DELETE CASCADE,
   class_level TEXT NOT NULL,
   semester CHAR(1) CHECK (semester IN ('1', '2')),
   academic_year TEXT NOT NULL,
