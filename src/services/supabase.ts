@@ -137,6 +137,30 @@ export function resetSupabaseClient(url: string, key: string) {
   }
 }
 
+// Exported supabase instance proxy for direct component/context imports
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    const client = getSupabaseClient();
+    if (!client) {
+      if (prop === 'channel') {
+        return () => ({
+          on: () => ({ subscribe: () => {} }),
+          subscribe: () => {}
+        });
+      }
+      if (prop === 'removeChannel') {
+        return () => {};
+      }
+      return undefined;
+    }
+    const val = (client as any)[prop];
+    if (typeof val === 'function') {
+      return val.bind(client);
+    }
+    return val;
+  }
+});
+
 // Master SQL Script untuk Reset Total & Inisialisasi Ulang Supabase Database
 export function generateSupabaseSQLScript(): string {
   return `-- ============================================================

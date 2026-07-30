@@ -15,7 +15,8 @@ import {
 import {
   INITIAL_ACADEMIC_YEARS,
   INITIAL_SYSTEM_SETTINGS,
-  getSupabaseClient
+  getSupabaseClient,
+  supabase
 } from '../services/supabase';
 import { showSuccessToast, showErrorToast } from '../components/common/SweetAlert';
 import { useAuth } from './AuthContext';
@@ -117,7 +118,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
   // Primary Database Re-Fetch Function (Single Source of Truth)
-  const loadDataFromSupabase = useCallback(async () => {
+  const fetchAllData = useCallback(async () => {
     const client = getSupabaseClient();
     if (!client) return;
 
@@ -327,36 +328,37 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const loadDataFromSupabase = fetchAllData;
+
   // Initialize Data Fetch and Realtime Subscriptions on Mount
   useEffect(() => {
-    const supabase = getSupabaseClient();
-    let channel: any = null;
-
-    if (supabase) {
+    const client = getSupabaseClient();
+    if (client) {
       setIsRealtimeConnected(true);
-      loadDataFromSupabase();
-
-      channel = supabase
-        .channel('public-db-changes')
-        .on('postgres_changes', { event: '*', schema: 'public' }, (payload: any) => {
-          console.log('[Supabase DB Realtime] Table change detected:', payload.table, payload.eventType);
-          loadDataFromSupabase();
-        })
-        .subscribe((status: string) => {
-          if (status === 'SUBSCRIBED') {
-            setIsRealtimeConnected(true);
-          }
-        });
     } else {
       setIsRealtimeConnected(false);
     }
 
+    // 1. Fetch data awal dari Supabase
+    fetchAllData();
+
+    // 2. Pasang listener Realtime
+    const channel = supabase
+      .channel('db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public' },
+        (_payload) => {
+          // Ambil ulang data dari Supabase setiap kali ada perubahan di DB
+          fetchAllData();
+        }
+      )
+      .subscribe();
+
     return () => {
-      if (supabase && channel) {
-        supabase.removeChannel(channel);
-      }
+      supabase.removeChannel(channel);
     };
-  }, [loadDataFromSupabase]);
+  }, [fetchAllData]);
 
   // Academic Year Actions
   const saveAcademicYearsToSupabase = async (newYears: AcademicYearItem[]) => {
