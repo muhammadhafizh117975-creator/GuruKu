@@ -57,6 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const supabase = getSupabaseClient();
       if (supabase) {
         try {
+          console.log('[Supabase DB Auth] Verifying login for user:', cleanInput);
           const { data, error } = await supabase
             .from('profiles')
             .select('*');
@@ -96,29 +97,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               if (rememberMe) {
                 localStorage.setItem('guruku_session_user', JSON.stringify(profile));
               }
-              showSuccessToast(`Selamat datang kembali, ${profile.fullName}! (Supabase DB)`);
+              showSuccessToast(`Selamat datang kembali, ${profile.fullName}!`);
               setLoading(false);
               return true;
             }
           }
         } catch (supabaseErr) {
-          console.warn('Supabase DB login error, falling back to local session:', supabaseErr);
+          console.warn('[Supabase DB Auth Error] Login query error:', supabaseErr);
         }
       }
 
-      // 3. Local state fallback
-      let savedTeachers: Profile[] = [];
-      const savedTeachersRaw = localStorage.getItem('guruku_teachers');
-      if (savedTeachersRaw) {
-        try {
-          savedTeachers = JSON.parse(savedTeachersRaw);
-        } catch (e) {
-          console.error(e);
-        }
-      }
-
-      const allProfiles = [...INITIAL_PROFILES, ...savedTeachers];
-      const matched = allProfiles.find((p) => {
+      // Check default initial profile as emergency fallback if Supabase not configured
+      const matched = INITIAL_PROFILES.find((p) => {
         const emailMatch = p.email.toLowerCase() === cleanInput;
         const unameMatch = p.username && (
           p.username.toLowerCase() === cleanInput ||
@@ -143,7 +133,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return true;
       }
 
-      showErrorToast('Username / Email atau kata sandi tidak ditemukan');
+      showErrorToast('Username / Email atau kata sandi tidak ditemukan di database.');
       setLoading(false);
       return false;
     } catch (err: any) {
@@ -231,15 +221,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     INITIAL_PROFILES.push(newGuru);
-    let savedTeachers: Profile[] = [];
-    const savedTeachersRaw = localStorage.getItem('guruku_teachers');
-    if (savedTeachersRaw) {
-      try { savedTeachers = JSON.parse(savedTeachersRaw); } catch (e) {}
-    }
-    if (!savedTeachers.some((t) => t.id === newGuru.id)) {
-      savedTeachers.unshift(newGuru);
-      localStorage.setItem('guruku_teachers', JSON.stringify(savedTeachers));
-    }
 
     showSuccessToast(`Akun Guru ${fullName} berhasil dibuat.`);
     return { success: true, password: autoPassword, profile: newGuru };
@@ -296,18 +277,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const foundInInitial = INITIAL_PROFILES.find((p) => p.id === guruId);
     if (foundInInitial) {
       foundInInitial.password = newPass;
-    }
-
-    // Update in localStorage guruku_teachers
-    const savedTeachersRaw = localStorage.getItem('guruku_teachers');
-    if (savedTeachersRaw) {
-      try {
-        const savedTeachers: Profile[] = JSON.parse(savedTeachersRaw);
-        const updated = savedTeachers.map((t) => (t.id === guruId ? { ...t, password: newPass } : t));
-        localStorage.setItem('guruku_teachers', JSON.stringify(updated));
-      } catch (e) {
-        console.error(e);
-      }
     }
 
     const sql = getNeonSql();

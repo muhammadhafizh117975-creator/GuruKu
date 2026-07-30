@@ -14,18 +14,8 @@ import {
 } from '../types';
 import {
   INITIAL_ACADEMIC_YEARS,
-  INITIAL_PROFILES,
-  INITIAL_SUBJECTS,
-  INITIAL_CLASSES,
-  INITIAL_STUDENTS,
-  INITIAL_GRADES,
-  INITIAL_ATTENDANCE,
-  INITIAL_JOURNALS,
-  INITIAL_MODULES,
   INITIAL_SYSTEM_SETTINGS,
-  INITIAL_ACTIVITY_LOGS,
-  getSupabaseClient,
-  getNeonSql
+  getSupabaseClient
 } from '../services/supabase';
 import { showSuccessToast, showErrorToast } from '../components/common/SweetAlert';
 import { useAuth } from './AuthContext';
@@ -88,10 +78,20 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const [academicYears, setAcademicYears] = useState<AcademicYearItem[]>(() => {
-    const saved = localStorage.getItem('guruku_academic_years');
-    return saved ? JSON.parse(saved) : INITIAL_ACADEMIC_YEARS;
-  });
+
+  // State initialized purely from memory (No LocalStorage persistence)
+  const [academicYears, setAcademicYears] = useState<AcademicYearItem[]>(INITIAL_ACADEMIC_YEARS);
+  const [teachers, setTeachers] = useState<Profile[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [classes, setClasses] = useState<ClassRoom[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [grades, setGrades] = useState<Grade[]>([]);
+  const [attendance, setAttendance] = useState<Attendance[]>([]);
+  const [journals, setJournals] = useState<TeachingJournal[]>([]);
+  const [modules, setModules] = useState<TeachingModule[]>([]);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings>(INITIAL_SYSTEM_SETTINGS);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(false);
 
   const activeAcademicYear = academicYears.find((ay) => ay.isActive) || academicYears[0] || {
     id: 'ay_default',
@@ -100,354 +100,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isActive: true,
     status: 'Aktif',
     createdAt: new Date().toISOString()
-  };
-
-  const [teachers, setTeachers] = useState<Profile[]>(() => {
-    const saved = localStorage.getItem('guruku_teachers');
-    return saved ? JSON.parse(saved) : INITIAL_PROFILES.filter((p) => p.role === 'guru');
-  });
-
-  const [subjects, setSubjects] = useState<Subject[]>(() => {
-    const saved = localStorage.getItem('guruku_subjects');
-    return saved ? JSON.parse(saved) : INITIAL_SUBJECTS;
-  });
-
-  const [classes, setClasses] = useState<ClassRoom[]>(() => {
-    const saved = localStorage.getItem('guruku_classes');
-    return saved ? JSON.parse(saved) : INITIAL_CLASSES;
-  });
-
-  const [students, setStudents] = useState<Student[]>(() => {
-    const saved = localStorage.getItem('guruku_students');
-    return saved ? JSON.parse(saved) : INITIAL_STUDENTS;
-  });
-
-  const [grades, setGrades] = useState<Grade[]>(() => {
-    const saved = localStorage.getItem('guruku_grades');
-    return saved ? JSON.parse(saved) : INITIAL_GRADES;
-  });
-
-  const [attendance, setAttendance] = useState<Attendance[]>(() => {
-    const saved = localStorage.getItem('guruku_attendance');
-    return saved ? JSON.parse(saved) : INITIAL_ATTENDANCE;
-  });
-
-  const [journals, setJournals] = useState<TeachingJournal[]>(() => {
-    const saved = localStorage.getItem('guruku_journals');
-    return saved ? JSON.parse(saved) : INITIAL_JOURNALS;
-  });
-
-  const [modules, setModules] = useState<TeachingModule[]>(() => {
-    const saved = localStorage.getItem('guruku_modules');
-    return saved ? JSON.parse(saved) : INITIAL_MODULES;
-  });
-
-  const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => {
-    const saved = localStorage.getItem('guruku_system_settings');
-    return saved ? JSON.parse(saved) : INITIAL_SYSTEM_SETTINGS;
-  });
-
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(() => {
-    const saved = localStorage.getItem('guruku_logs');
-    return saved ? JSON.parse(saved) : INITIAL_ACTIVITY_LOGS;
-  });
-
-  const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(false);
-
-  // Sync to localStorage
-  useEffect(() => { localStorage.setItem('guruku_academic_years', JSON.stringify(academicYears)); }, [academicYears]);
-  useEffect(() => { localStorage.setItem('guruku_teachers', JSON.stringify(teachers)); }, [teachers]);
-  useEffect(() => { localStorage.setItem('guruku_subjects', JSON.stringify(subjects)); }, [subjects]);
-  useEffect(() => { localStorage.setItem('guruku_classes', JSON.stringify(classes)); }, [classes]);
-  useEffect(() => { localStorage.setItem('guruku_students', JSON.stringify(students)); }, [students]);
-  useEffect(() => { localStorage.setItem('guruku_grades', JSON.stringify(grades)); }, [grades]);
-  useEffect(() => { localStorage.setItem('guruku_attendance', JSON.stringify(attendance)); }, [attendance]);
-  useEffect(() => { localStorage.setItem('guruku_journals', JSON.stringify(journals)); }, [journals]);
-  useEffect(() => { localStorage.setItem('guruku_modules', JSON.stringify(modules)); }, [modules]);
-  useEffect(() => { localStorage.setItem('guruku_system_settings', JSON.stringify(systemSettings)); }, [systemSettings]);
-  useEffect(() => { localStorage.setItem('guruku_logs', JSON.stringify(activityLogs)); }, [activityLogs]);
-
-  // Set up Supabase Realtime & Cross-tab Listeners for 24/7 Always-Online Realtime Synchronization
-  useEffect(() => {
-    // 1. Cross-tab & Multi-window Realtime Listener (BroadcastChannel)
-    let broadcast: BroadcastChannel | null = null;
-    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
-      broadcast = new BroadcastChannel('guruku_realtime_sync');
-      broadcast.onmessage = (event) => {
-        if (event.data?.type === 'SYNC_ALL_DATA') {
-          const ay = localStorage.getItem('guruku_academic_years');
-          if (ay) setAcademicYears(JSON.parse(ay));
-          const t = localStorage.getItem('guruku_teachers');
-          if (t) setTeachers(JSON.parse(t));
-          const s = localStorage.getItem('guruku_subjects');
-          if (s) setSubjects(JSON.parse(s));
-          const c = localStorage.getItem('guruku_classes');
-          if (c) setClasses(JSON.parse(c));
-          const st = localStorage.getItem('guruku_students');
-          if (st) setStudents(JSON.parse(st));
-          const g = localStorage.getItem('guruku_grades');
-          if (g) setGrades(JSON.parse(g));
-          const a = localStorage.getItem('guruku_attendance');
-          if (a) setAttendance(JSON.parse(a));
-          const j = localStorage.getItem('guruku_journals');
-          if (j) setJournals(JSON.parse(j));
-          const m = localStorage.getItem('guruku_modules');
-          if (m) setModules(JSON.parse(m));
-          const sys = localStorage.getItem('guruku_system_settings');
-          if (sys) setSystemSettings(JSON.parse(sys));
-        }
-      };
-    }
-
-    // Storage event listener fallback for older browsers
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'guruku_academic_years' && e.newValue) setAcademicYears(JSON.parse(e.newValue));
-      if (e.key === 'guruku_teachers' && e.newValue) setTeachers(JSON.parse(e.newValue));
-      if (e.key === 'guruku_subjects' && e.newValue) setSubjects(JSON.parse(e.newValue));
-      if (e.key === 'guruku_classes' && e.newValue) setClasses(JSON.parse(e.newValue));
-      if (e.key === 'guruku_students' && e.newValue) setStudents(JSON.parse(e.newValue));
-      if (e.key === 'guruku_grades' && e.newValue) setGrades(JSON.parse(e.newValue));
-      if (e.key === 'guruku_attendance' && e.newValue) setAttendance(JSON.parse(e.newValue));
-      if (e.key === 'guruku_journals' && e.newValue) setJournals(JSON.parse(e.newValue));
-      if (e.key === 'guruku_modules' && e.newValue) setModules(JSON.parse(e.newValue));
-      if (e.key === 'guruku_system_settings' && e.newValue) setSystemSettings(JSON.parse(e.newValue));
-    };
-    window.addEventListener('storage', handleStorageChange);
-
-    // 2. Supabase Realtime Listener & Initial Sync
-    const supabase = getSupabaseClient();
-    let channel: any = null;
-
-    const loadDataFromSupabase = async () => {
-      const client = getSupabaseClient();
-      if (!client) return;
-
-      try {
-        // Profiles (Guru)
-        const { data: profs } = await client.from('profiles').select('*');
-        if (profs && profs.length > 0) {
-          const guruList: Profile[] = profs
-            .filter((p: any) => p.role === 'guru')
-            .map((p: any) => ({
-              id: p.id,
-              email: p.email,
-              username: p.username,
-              password: p.password,
-              fullName: p.full_name,
-              role: p.role,
-              nipNuptk: p.nip_nuptk,
-              phone: p.phone,
-              avatarUrl: p.avatar_url,
-              createdAt: p.created_at,
-              updatedAt: p.updated_at
-            }));
-          if (guruList.length > 0) setTeachers(guruList);
-        }
-
-        // Classes
-        const { data: clsData } = await client.from('classes').select('*');
-        let fetchedClasses: ClassRoom[] = [];
-        if (clsData && clsData.length > 0) {
-          fetchedClasses = clsData.map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            gradeLevel: c.grade_level,
-            academicYear: c.academic_year,
-            homeroomTeacherId: c.homeroom_teacher_id,
-            createdAt: c.created_at
-          }));
-          setClasses(fetchedClasses);
-        }
-
-        // Subjects
-        const { data: sbjData } = await client.from('subjects').select('*');
-        if (sbjData && sbjData.length > 0) {
-          const mappedSbj: Subject[] = sbjData.map((s: any) => ({
-            id: s.id,
-            code: s.code,
-            name: s.name,
-            description: s.description,
-            teacherIds: s.teacher_ids || [],
-            createdAt: s.created_at
-          }));
-          setSubjects(mappedSbj);
-        }
-
-        // Students
-        const { data: stdData } = await client.from('students').select('*');
-        if (stdData && stdData.length > 0) {
-          const mappedStd: Student[] = stdData.map((s: any) => {
-            const cls = fetchedClasses.find((c) => c.id === s.class_id);
-            return {
-              id: s.id,
-              nis: s.nis,
-              fullName: s.full_name,
-              gender: s.gender,
-              birthPlace: s.birth_place,
-              birthDate: s.birth_date,
-              address: s.address,
-              parentPhone: s.parent_phone,
-              classId: s.class_id || '',
-              className: cls ? cls.name : 'Belum Ada Kelas',
-              createdAt: s.created_at
-            };
-          });
-          setStudents(mappedStd);
-        }
-
-        // Grades
-        const { data: grdData } = await client.from('grades').select('*');
-        if (grdData && grdData.length > 0) {
-          const mappedGrd: Grade[] = grdData.map((g: any) => ({
-            id: g.id,
-            studentId: g.student_id,
-            studentName: '',
-            studentNis: '',
-            subjectId: g.subject_id,
-            subjectName: '',
-            classId: g.class_id,
-            className: '',
-            teacherId: g.teacher_id,
-            assignmentScore: Number(g.assignment_score || 0),
-            dailyScore: Number(g.daily_score || 0),
-            ptsScore: Number(g.pts_score || 0),
-            pasScore: Number(g.pas_score || 0),
-            finalScore: Number(g.final_score || 0),
-            predicate: g.predicate || 'D',
-            notes: g.notes || '',
-            academicYear: g.academic_year,
-            semester: g.semester,
-            updatedAt: g.updated_at
-          }));
-          setGrades(mappedGrd);
-        }
-
-        // Attendance
-        const { data: attData } = await client.from('attendance').select('*');
-        if (attData && attData.length > 0) {
-          const mappedAtt: Attendance[] = attData.map((a: any) => ({
-            id: a.id,
-            date: a.date,
-            studentId: a.student_id,
-            classId: a.class_id,
-            subjectId: a.subject_id,
-            teacherId: a.teacher_id,
-            status: a.status,
-            notes: a.notes,
-            createdAt: a.created_at
-          }));
-          setAttendance(mappedAtt);
-        }
-
-        // Teaching Journals
-        const { data: jrnData } = await client.from('teaching_journals').select('*');
-        if (jrnData && jrnData.length > 0) {
-          const mappedJrn: TeachingJournal[] = jrnData.map((j: any) => ({
-            id: j.id,
-            date: j.date,
-            subjectId: j.subject_id,
-            classId: j.class_id,
-            teacherId: j.teacher_id,
-            timeSlot: j.time_slot,
-            topic: j.topic,
-            method: j.method,
-            attendeeCount: j.attendee_count,
-            notes: j.notes,
-            attachmentName: j.attachment_name,
-            attachmentDriveId: j.attachment_drive_id,
-            attachmentWebViewLink: j.attachment_web_view_link,
-            attachmentWebContentLink: j.attachment_web_content_link,
-            createdAt: j.created_at
-          }));
-          setJournals(mappedJrn);
-        }
-
-        // Teaching Modules
-        const { data: modData } = await client.from('teaching_modules').select('*');
-        if (modData && modData.length > 0) {
-          const mappedMod: TeachingModule[] = modData.map((m: any) => ({
-            id: m.id,
-            title: m.title,
-            subjectId: m.subject_id,
-            classLevel: m.class_level,
-            semester: m.semester,
-            academicYear: m.academic_year,
-            description: m.description,
-            fileType: m.file_type,
-            fileName: m.file_name,
-            fileSize: m.file_size,
-            fileDriveId: m.file_drive_id,
-            webViewLink: m.web_view_link,
-            webContentLink: m.web_content_link,
-            teacherId: m.teacher_id,
-            createdAt: m.created_at
-          }));
-          setModules(mappedMod);
-        }
-      } catch (err) {
-        console.warn('Error loading Supabase initial data:', err);
-      }
-    };
-
-    if (supabase) {
-      setIsRealtimeConnected(true);
-      loadDataFromSupabase();
-
-      channel = supabase
-        .channel('schema-db-changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => {
-          loadDataFromSupabase();
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'classes' }, () => {
-          loadDataFromSupabase();
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'subjects' }, () => {
-          loadDataFromSupabase();
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-          loadDataFromSupabase();
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'grades' }, () => {
-          loadDataFromSupabase();
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, () => {
-          loadDataFromSupabase();
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'teaching_journals' }, () => {
-          loadDataFromSupabase();
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'teaching_modules' }, () => {
-          loadDataFromSupabase();
-        })
-        .subscribe((status: string) => {
-          if (status === 'SUBSCRIBED') {
-            setIsRealtimeConnected(true);
-          }
-        });
-    } else {
-      setIsRealtimeConnected(true);
-    }
-
-    return () => {
-      if (broadcast) broadcast.close();
-      window.removeEventListener('storage', handleStorageChange);
-      if (supabase && channel) {
-        supabase.removeChannel(channel);
-      }
-    };
-  }, []);
-
-  // Helper to trigger broadcast sync to other tabs/windows
-  const notifyBroadcastSync = () => {
-    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
-      try {
-        const bc = new BroadcastChannel('guruku_realtime_sync');
-        bc.postMessage({ type: 'SYNC_ALL_DATA', timestamp: Date.now() });
-        bc.close();
-      } catch (e) {
-        // silent fallback
-      }
-    }
   };
 
   const logActivity = useCallback((action: string, details: string) => {
@@ -464,154 +116,327 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setActivityLogs((prev) => [newLog, ...prev.slice(0, 49)]);
   }, [user]);
 
+  // Primary Database Re-Fetch Function (Single Source of Truth)
+  const loadDataFromSupabase = useCallback(async () => {
+    const client = getSupabaseClient();
+    if (!client) return;
+
+    try {
+      console.log('[Supabase DB Sync] Fetching full database state...');
+
+      // 1. System Settings & Academic Years
+      const { data: sysData, error: sysErr } = await client.from('system_settings').select('*');
+      if (!sysErr && sysData) {
+        const cfgRow = sysData.find((r: any) => r.key === 'main_config');
+        if (cfgRow && cfgRow.value) {
+          setSystemSettings(cfgRow.value);
+        }
+        const ayRow = sysData.find((r: any) => r.key === 'academic_years');
+        if (ayRow && Array.isArray(ayRow.value) && ayRow.value.length > 0) {
+          setAcademicYears(ayRow.value);
+        }
+      }
+
+      // 2. Profiles (Guru)
+      const { data: profs, error: profErr } = await client.from('profiles').select('*');
+      let fetchedTeachers: Profile[] = [];
+      if (!profErr && profs) {
+        fetchedTeachers = profs
+          .filter((p: any) => p.role === 'guru')
+          .map((p: any) => ({
+            id: p.id,
+            email: p.email,
+            username: p.username,
+            password: p.password,
+            fullName: p.full_name,
+            role: p.role,
+            nipNuptk: p.nip_nuptk,
+            phone: p.phone,
+            avatarUrl: p.avatar_url,
+            avatarDriveId: p.avatar_drive_id,
+            createdAt: p.created_at,
+            updatedAt: p.updated_at
+          }));
+        setTeachers(fetchedTeachers);
+      }
+
+      // 3. Classes
+      const { data: clsData, error: clsErr } = await client.from('classes').select('*');
+      let fetchedClasses: ClassRoom[] = [];
+      if (!clsErr && clsData) {
+        fetchedClasses = clsData.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          gradeLevel: c.grade_level,
+          academicYear: c.academic_year,
+          homeroomTeacherId: c.homeroom_teacher_id,
+          createdAt: c.created_at
+        }));
+        setClasses(fetchedClasses);
+      }
+
+      // 4. Subjects
+      const { data: sbjData, error: sbjErr } = await client.from('subjects').select('*');
+      let fetchedSubjects: Subject[] = [];
+      if (!sbjErr && sbjData) {
+        fetchedSubjects = sbjData.map((s: any) => ({
+          id: s.id,
+          code: s.code,
+          name: s.name,
+          description: s.description,
+          teacherIds: s.teacher_ids || [],
+          createdAt: s.created_at
+        }));
+        setSubjects(fetchedSubjects);
+      }
+
+      // 5. Students
+      const { data: stdData, error: stdErr } = await client.from('students').select('*');
+      let fetchedStudents: Student[] = [];
+      if (!stdErr && stdData) {
+        fetchedStudents = stdData.map((s: any) => {
+          const cls = fetchedClasses.find((c) => c.id === s.class_id);
+          return {
+            id: s.id,
+            nis: s.nis,
+            fullName: s.full_name,
+            gender: s.gender,
+            birthPlace: s.birth_place,
+            birthDate: s.birth_date,
+            address: s.address,
+            parentPhone: s.parent_phone,
+            classId: s.class_id || '',
+            className: cls ? cls.name : 'Belum Ada Kelas',
+            createdAt: s.created_at
+          };
+        });
+        setStudents(fetchedStudents);
+      }
+
+      // 6. Grades
+      const { data: grdData, error: grdErr } = await client.from('grades').select('*');
+      if (!grdErr && grdData) {
+        const fetchedGrades: Grade[] = grdData.map((g: any) => {
+          const student = fetchedStudents.find((s) => s.id === g.student_id);
+          const subject = fetchedSubjects.find((s) => s.id === g.subject_id);
+          const cls = fetchedClasses.find((c) => c.id === g.class_id);
+          return {
+            id: g.id,
+            studentId: g.student_id,
+            studentName: student?.fullName || 'Siswa',
+            studentNis: student?.nis || '',
+            subjectId: g.subject_id,
+            subjectName: subject?.name || 'Mata Pelajaran',
+            classId: g.class_id,
+            className: cls?.name || 'Kelas',
+            teacherId: g.teacher_id,
+            assignmentScore: Number(g.assignment_score || 0),
+            dailyScore: Number(g.daily_score || 0),
+            ptsScore: Number(g.pts_score || 0),
+            pasScore: Number(g.pas_score || 0),
+            finalScore: Number(g.final_score || 0),
+            predicate: g.predicate || 'D',
+            notes: g.notes || '',
+            academicYear: g.academic_year,
+            semester: g.semester,
+            updatedAt: g.updated_at
+          };
+        });
+        setGrades(fetchedGrades);
+      }
+
+      // 7. Attendance
+      const { data: attData, error: attErr } = await client.from('attendance').select('*');
+      if (!attErr && attData) {
+        const fetchedAttendance: Attendance[] = attData.map((a: any) => {
+          const student = fetchedStudents.find((s) => s.id === a.student_id);
+          return {
+            id: a.id,
+            date: a.date,
+            studentId: a.student_id,
+            studentName: student?.fullName,
+            studentNis: student?.nis,
+            classId: a.class_id,
+            subjectId: a.subject_id,
+            teacherId: a.teacher_id,
+            status: a.status,
+            notes: a.notes,
+            createdAt: a.created_at
+          };
+        });
+        setAttendance(fetchedAttendance);
+      }
+
+      // 8. Teaching Journals
+      const { data: jrnData, error: jrnErr } = await client.from('teaching_journals').select('*');
+      if (!jrnErr && jrnData) {
+        const fetchedJournals: TeachingJournal[] = jrnData.map((j: any) => {
+          const subject = fetchedSubjects.find((s) => s.id === j.subject_id);
+          const cls = fetchedClasses.find((c) => c.id === j.class_id);
+          return {
+            id: j.id,
+            date: j.date,
+            subjectId: j.subject_id,
+            subjectName: subject?.name,
+            classId: j.class_id,
+            className: cls?.name,
+            teacherId: j.teacher_id,
+            timeSlot: j.time_slot,
+            topic: j.topic,
+            method: j.method,
+            attendeeCount: j.attendee_count,
+            notes: j.notes,
+            attachmentName: j.attachment_name,
+            attachmentDriveId: j.attachment_drive_id,
+            attachmentWebViewLink: j.attachment_web_view_link,
+            attachmentWebContentLink: j.attachment_web_content_link,
+            createdAt: j.created_at
+          };
+        });
+        setJournals(fetchedJournals);
+      }
+
+      // 9. Teaching Modules
+      const { data: modData, error: modErr } = await client.from('teaching_modules').select('*');
+      if (!modErr && modData) {
+        const fetchedModules: TeachingModule[] = modData.map((m: any) => {
+          const subject = fetchedSubjects.find((s) => s.id === m.subject_id);
+          return {
+            id: m.id,
+            title: m.title,
+            subjectId: m.subject_id,
+            subjectName: subject?.name,
+            classLevel: m.class_level,
+            semester: m.semester,
+            academicYear: m.academic_year,
+            description: m.description,
+            fileType: m.file_type,
+            fileName: m.file_name,
+            fileSize: m.file_size,
+            fileDriveId: m.file_drive_id,
+            webViewLink: m.web_view_link,
+            webContentLink: m.web_content_link,
+            teacherId: m.teacher_id,
+            createdAt: m.created_at
+          };
+        });
+        setModules(fetchedModules);
+      }
+    } catch (err) {
+      console.warn('[Supabase DB Sync Error] Failed to load data:', err);
+    }
+  }, []);
+
+  // Initialize Data Fetch and Realtime Subscriptions on Mount
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+    let channel: any = null;
+
+    if (supabase) {
+      setIsRealtimeConnected(true);
+      loadDataFromSupabase();
+
+      channel = supabase
+        .channel('public-db-changes')
+        .on('postgres_changes', { event: '*', schema: 'public' }, (payload: any) => {
+          console.log('[Supabase DB Realtime] Table change detected:', payload.table, payload.eventType);
+          loadDataFromSupabase();
+        })
+        .subscribe((status: string) => {
+          if (status === 'SUBSCRIBED') {
+            setIsRealtimeConnected(true);
+          }
+        });
+    } else {
+      setIsRealtimeConnected(false);
+    }
+
+    return () => {
+      if (supabase && channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [loadDataFromSupabase]);
+
   // Academic Year Actions
-  const addAcademicYear = (ay: Omit<AcademicYearItem, 'id' | 'createdAt'>) => {
+  const saveAcademicYearsToSupabase = async (newYears: AcademicYearItem[]) => {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      await supabase.from('system_settings').upsert({
+        key: 'academic_years',
+        value: newYears,
+        updated_at: new Date().toISOString()
+      });
+      await loadDataFromSupabase();
+    }
+  };
+
+  const addAcademicYear = async (ay: Omit<AcademicYearItem, 'id' | 'createdAt'>) => {
     const newAy: AcademicYearItem = {
       ...ay,
       id: `ay_${Date.now()}`,
       createdAt: new Date().toISOString()
     };
+    let nextAy: AcademicYearItem[];
     if (ay.isActive) {
-      setAcademicYears((prev) =>
-        prev.map((item) => ({ ...item, isActive: false, status: 'Non-Aktif' })).concat(newAy)
-      );
+      nextAy = academicYears.map((item) => ({ ...item, isActive: false, status: 'Non-Aktif' })).concat(newAy);
     } else {
-      setAcademicYears((prev) => [newAy, ...prev]);
+      nextAy = [newAy, ...academicYears];
     }
-
-    const supabase = getSupabaseClient();
-    if (supabase) {
-      supabase.from('system_settings').upsert({
-        key: 'academic_years',
-        value: academicYears,
-        updated_at: new Date().toISOString()
-      }).then(({ error }: any) => {
-        if (error) console.warn('Supabase academic year save error:', error);
-      });
-    }
-
+    setAcademicYears(nextAy);
+    await saveAcademicYearsToSupabase(nextAy);
     logActivity('TAMBAH_TAHUN_AJARAN', `Menambahkan tahun pelajaran ${newAy.year} Semester ${newAy.semester}`);
     showSuccessToast('Tahun Pelajaran berhasil ditambahkan.');
   };
 
-  const updateAcademicYear = (id: string, updated: Partial<AcademicYearItem>) => {
-    setAcademicYears((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          const nextIsActive = updated.isActive !== undefined ? updated.isActive : item.isActive;
-          return {
-            ...item,
-            ...updated,
-            status: nextIsActive ? 'Aktif' : 'Non-Aktif'
-          };
-        }
-        if (updated.isActive) {
-          return { ...item, isActive: false, status: 'Non-Aktif' };
-        }
-        return item;
-      })
-    );
+  const updateAcademicYear = async (id: string, updated: Partial<AcademicYearItem>) => {
+    const nextAy = academicYears.map((item) => {
+      if (item.id === id) {
+        const nextIsActive = updated.isActive !== undefined ? updated.isActive : item.isActive;
+        return { ...item, ...updated, status: nextIsActive ? 'Aktif' : 'Non-Aktif' };
+      }
+      if (updated.isActive) {
+        return { ...item, isActive: false, status: 'Non-Aktif' };
+      }
+      return item;
+    });
+    setAcademicYears(nextAy);
+    await saveAcademicYearsToSupabase(nextAy);
     logActivity('UBAH_TAHUN_AJARAN', `Memperbarui data tahun pelajaran`);
     showSuccessToast('Tahun Pelajaran berhasil diperbarui.');
   };
 
-  const setActiveAcademicYear = (id: string) => {
-    setAcademicYears((prev) =>
-      prev.map((item) => ({
-        ...item,
-        isActive: item.id === id,
-        status: item.id === id ? 'Aktif' : 'Non-Aktif'
-      }))
-    );
+  const setActiveAcademicYear = async (id: string) => {
+    const nextAy = academicYears.map((item) => ({
+      ...item,
+      isActive: item.id === id,
+      status: item.id === id ? 'Aktif' : 'Non-Aktif'
+    }));
+    setAcademicYears(nextAy);
+    await saveAcademicYearsToSupabase(nextAy);
     const selected = academicYears.find((ay) => ay.id === id);
     logActivity('AKTIFKAN_TAHUN_AJARAN', `Mengaktifkan tahun pelajaran ${selected?.year || id}`);
-    showSuccessToast(`Tahun Pelajaran ${selected?.year} Semester ${selected?.semester} diaktifkan sebagai default.`);
+    showSuccessToast(`Tahun Pelajaran ${selected?.year} Semester ${selected?.semester} diaktifkan.`);
   };
 
-  const deleteAcademicYear = (id: string) => {
-    setAcademicYears((prev) => prev.filter((item) => item.id !== id));
+  const deleteAcademicYear = async (id: string) => {
+    const nextAy = academicYears.filter((item) => item.id !== id);
+    setAcademicYears(nextAy);
+    await saveAcademicYearsToSupabase(nextAy);
     logActivity('HAPUS_TAHUN_AJARAN', `Menghapus tahun pelajaran`);
     showSuccessToast('Tahun Pelajaran berhasil dihapus.');
   };
 
-  // Fetch teachers from Supabase on mount if available
-  useEffect(() => {
-    const fetchTeachersFromDB = async () => {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('role', 'guru');
-          if (data && !error && data.length > 0) {
-            const fetched: Profile[] = data.map((d: any) => ({
-              id: d.id,
-              email: d.email,
-              username: d.username,
-              fullName: d.full_name,
-              role: d.role,
-              nipNuptk: d.nip_nuptk,
-              phone: d.phone,
-              password: d.password,
-              avatarUrl: d.avatar_url,
-              avatarDriveId: d.avatar_drive_id,
-              createdAt: d.created_at,
-              updatedAt: d.updated_at
-            }));
-            setTeachers(fetched);
-            localStorage.setItem('guruku_teachers', JSON.stringify(fetched));
-            return;
-          }
-        } catch (e) {
-          console.warn('Gagal mengambil data guru dari Supabase:', e);
-        }
-      }
-
-      const sql = getNeonSql();
-      if (sql) {
-        try {
-          const data = await sql`SELECT * FROM public.profiles WHERE role = 'guru'`;
-          if (data && data.length > 0) {
-            const fetched: Profile[] = data.map((d: any) => ({
-              id: d.id,
-              email: d.email,
-              username: d.username,
-              fullName: d.full_name,
-              role: d.role,
-              nipNuptk: d.nip_nuptk,
-              phone: d.phone,
-              password: d.password,
-              avatarUrl: d.avatar_url,
-              avatarDriveId: d.avatar_drive_id,
-              createdAt: d.created_at ? new Date(d.created_at).toISOString() : new Date().toISOString(),
-              updatedAt: d.updated_at ? new Date(d.updated_at).toISOString() : new Date().toISOString()
-            }));
-            setTeachers(fetched);
-            localStorage.setItem('guruku_teachers', JSON.stringify(fetched));
-          }
-        } catch (e) {
-          console.warn('Gagal mengambil data guru dari Neon DB:', e);
-        }
-      }
-    };
-    fetchTeachersFromDB();
-  }, []);
-
   // Teacher Actions
-  const addTeacher = (teacher: Profile) => {
-    setTeachers((prev) => {
-      if (prev.some((t) => t.id === teacher.id)) return prev;
-      return [teacher, ...prev];
-    });
-
+  const addTeacher = async (teacher: Profile) => {
     const supabase = getSupabaseClient();
     if (supabase) {
-      supabase.from('profiles').insert([{
-        id: teacher.id,
+      console.log('[Supabase DB] Adding teacher to profiles:', teacher.fullName);
+      const { error } = await supabase.from('profiles').insert([{
+        id: teacher.id || `user_guru_${Date.now()}`,
         email: teacher.email,
         username: teacher.username,
-        password: teacher.password,
+        password: teacher.password || 'Gk-123456',
         full_name: teacher.fullName,
         role: teacher.role || 'guru',
         nip_nuptk: teacher.nipNuptk,
@@ -619,237 +444,191 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         avatar_url: teacher.avatarUrl,
         created_at: teacher.createdAt || new Date().toISOString(),
         updated_at: teacher.updatedAt || new Date().toISOString()
-      }]).then(({ error }: any) => {
-        if (error) console.warn('Supabase add teacher error:', error);
-      });
+      }]);
+      if (error) {
+        console.error('[Supabase DB Error] Insert teacher failed:', error);
+        showErrorToast(`Gagal menyimpan data guru: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('TAMBAH_GURU', `Menambahkan akun guru ${teacher.fullName}`);
+        showSuccessToast('Data guru berhasil ditambahkan.');
+      }
     }
-
-    notifyBroadcastSync();
-    logActivity('TAMBAH_GURU', `Menambahkan data akun guru ${teacher.fullName}`);
   };
 
-  const updateTeacher = (id: string, updated: Partial<Profile>) => {
-    setTeachers((prev) => prev.map((t) => (t.id === id ? { ...t, ...updated } : t)));
-    
-    const sql = getNeonSql();
-    if (sql) {
-      sql`
-        UPDATE public.profiles
-        SET full_name = ${updated.fullName},
-            username = ${updated.username},
-            email = ${updated.email},
-            nip_nuptk = ${updated.nipNuptk},
-            phone = ${updated.phone},
-            updated_at = NOW()
-        WHERE id = ${id}
-      `.catch((err: any) => console.warn('Neon DB teacher update error:', err));
-    }
-
+  const updateTeacher = async (id: string, updated: Partial<Profile>) => {
     const supabase = getSupabaseClient();
     if (supabase) {
-      supabase.from('profiles').update({
+      console.log('[Supabase DB] Updating teacher profile:', id);
+      const { error } = await supabase.from('profiles').update({
         full_name: updated.fullName,
         username: updated.username,
         email: updated.email,
         nip_nuptk: updated.nipNuptk,
         phone: updated.phone,
         updated_at: new Date().toISOString()
-      }).eq('id', id).then(() => {});
+      }).eq('id', id);
+      if (error) {
+        console.error('[Supabase DB Error] Update teacher failed:', error);
+        showErrorToast(`Gagal memperbarui data guru: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('UBAH_GURU', `Memperbarui data guru ${updated.fullName || ''}`);
+        showSuccessToast('Data guru berhasil diperbarui.');
+      }
     }
-    notifyBroadcastSync();
-    logActivity('UBAH_GURU', `Memperbarui data guru ${updated.fullName || ''}`);
-    showSuccessToast('Data guru berhasil diperbarui.');
   };
 
-  const deleteTeacher = (id: string) => {
-    setTeachers((prev) => prev.filter((t) => t.id !== id));
-    
-    const sql = getNeonSql();
-    if (sql) {
-      sql`DELETE FROM public.profiles WHERE id = ${id}`.catch((err: any) => console.warn('Neon DB teacher delete error:', err));
-    }
-
+  const deleteTeacher = async (id: string) => {
     const supabase = getSupabaseClient();
     if (supabase) {
-      supabase.from('profiles').delete().eq('id', id).then(() => {});
+      console.log('[Supabase DB] Deleting teacher profile:', id);
+      const { error } = await supabase.from('profiles').delete().eq('id', id);
+      if (error) {
+        console.error('[Supabase DB Error] Delete teacher failed:', error);
+        showErrorToast(`Gagal menghapus data guru: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('HAPUS_GURU', `Menghapus data guru`);
+        showSuccessToast('Data guru berhasil dihapus.');
+      }
     }
-    notifyBroadcastSync();
-    logActivity('HAPUS_GURU', `Menghapus data guru`);
-    showSuccessToast('Data guru berhasil dihapus.');
   };
 
-  // Actions
-  const addSubject = (subj: Omit<Subject, 'id' | 'createdAt'>) => {
-    const newSubj: Subject = {
-      ...subj,
-      id: `subj_${Date.now()}`,
-      createdAt: new Date().toISOString()
-    };
-    setSubjects((prev) => [newSubj, ...prev]);
-
+  // Subject Actions
+  const addSubject = async (subj: Omit<Subject, 'id' | 'createdAt'>) => {
     const supabase = getSupabaseClient();
+    const newSubjId = `subj_${Date.now()}`;
     if (supabase) {
-      supabase.from('subjects').insert([{
-        id: newSubj.id,
-        code: newSubj.code,
-        name: newSubj.name,
-        description: newSubj.description || '',
-        teacher_ids: newSubj.teacherIds || [],
-        created_at: newSubj.createdAt
-      }]).then(({ error }: any) => {
-        if (error) console.warn('Supabase add subject error:', error);
-      });
+      console.log('[Supabase DB] Adding subject:', subj.name);
+      const { error } = await supabase.from('subjects').insert([{
+        id: newSubjId,
+        code: subj.code,
+        name: subj.name,
+        description: subj.description || '',
+        teacher_ids: subj.teacherIds || [],
+        created_at: new Date().toISOString()
+      }]);
+      if (error) {
+        console.error('[Supabase DB Error] Insert subject failed:', error);
+        showErrorToast(`Gagal menambah mata pelajaran: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('TAMBAH_MATA_PELAJARAN', `Menambahkan mata pelajaran ${subj.name}`);
+        showSuccessToast('Mata Pelajaran berhasil ditambahkan.');
+      }
     }
-
-    logActivity('TAMBAH_MATA_PELAJARAN', `Menambahkan mata pelajaran ${newSubj.name}`);
-    showSuccessToast('Mata Pelajaran berhasil ditambahkan.');
   };
 
-  const updateSubject = (id: string, updated: Partial<Subject>) => {
-    setSubjects((prev) => prev.map((s) => (s.id === id ? { ...s, ...updated } : s)));
-
+  const updateSubject = async (id: string, updated: Partial<Subject>) => {
     const supabase = getSupabaseClient();
     if (supabase) {
+      console.log('[Supabase DB] Updating subject:', id);
       const payload: any = {};
       if (updated.code) payload.code = updated.code;
       if (updated.name) payload.name = updated.name;
       if (updated.description !== undefined) payload.description = updated.description;
       if (updated.teacherIds) payload.teacher_ids = updated.teacherIds;
-      
-      supabase.from('subjects').update(payload).eq('id', id).then(({ error }: any) => {
-        if (error) console.warn('Supabase update subject error:', error);
-      });
-    }
 
-    logActivity('UBAH_MATA_PELAJARAN', `Memperbarui data mata pelajaran`);
-    showSuccessToast('Mata Pelajaran berhasil diperbarui.');
+      const { error } = await supabase.from('subjects').update(payload).eq('id', id);
+      if (error) {
+        console.error('[Supabase DB Error] Update subject failed:', error);
+        showErrorToast(`Gagal memperbarui mata pelajaran: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('UBAH_MATA_PELAJARAN', `Memperbarui data mata pelajaran`);
+        showSuccessToast('Mata Pelajaran berhasil diperbarui.');
+      }
+    }
   };
 
-  const deleteSubject = (id: string) => {
-    setSubjects((prev) => prev.filter((s) => s.id !== id));
-
+  const deleteSubject = async (id: string) => {
     const supabase = getSupabaseClient();
     if (supabase) {
-      supabase.from('subjects').delete().eq('id', id).then(({ error }: any) => {
-        if (error) console.warn('Supabase delete subject error:', error);
-      });
+      console.log('[Supabase DB] Deleting subject:', id);
+      const { error } = await supabase.from('subjects').delete().eq('id', id);
+      if (error) {
+        console.error('[Supabase DB Error] Delete subject failed:', error);
+        showErrorToast(`Gagal menghapus mata pelajaran: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('HAPUS_MATA_PELAJARAN', `Menghapus mata pelajaran`);
+        showSuccessToast('Mata Pelajaran berhasil dihapus.');
+      }
     }
-
-    logActivity('HAPUS_MATA_PELAJARAN', `Menghapus mata pelajaran`);
-    showSuccessToast('Mata Pelajaran berhasil dihapus.');
   };
 
-  const addClass = (cls: Omit<ClassRoom, 'id' | 'createdAt'>) => {
-    const newCls: ClassRoom = {
-      ...cls,
-      id: `class_${Date.now()}`,
-      createdAt: new Date().toISOString()
-    };
-    setClasses((prev) => [newCls, ...prev]);
-
+  // Class Actions
+  const addClass = async (cls: Omit<ClassRoom, 'id' | 'createdAt'>) => {
     const supabase = getSupabaseClient();
+    const newClassId = `class_${Date.now()}`;
     if (supabase) {
-      supabase.from('classes').insert([{
-        id: newCls.id,
-        name: newCls.name,
-        grade_level: newCls.gradeLevel,
-        academic_year: newCls.academicYear,
-        homeroom_teacher_id: newCls.homeroomTeacherId || null,
-        created_at: newCls.createdAt
-      }]).then(({ error }: any) => {
-        if (error) console.warn('Supabase add class error:', error);
-      });
+      console.log('[Supabase DB] Adding class:', cls.name);
+      const { error } = await supabase.from('classes').insert([{
+        id: newClassId,
+        name: cls.name,
+        grade_level: cls.gradeLevel,
+        academic_year: cls.academicYear,
+        homeroom_teacher_id: cls.homeroomTeacherId || null,
+        created_at: new Date().toISOString()
+      }]);
+      if (error) {
+        console.error('[Supabase DB Error] Insert class failed:', error);
+        showErrorToast(`Gagal menambah kelas: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('TAMBAH_KELAS', `Menambahkan kelas ${cls.name}`);
+        showSuccessToast('Kelas berhasil ditambahkan.');
+      }
     }
-
-    logActivity('TAMBAH_KELAS', `Menambahkan kelas ${newCls.name}`);
-    showSuccessToast('Kelas berhasil ditambahkan.');
   };
 
-  const updateClass = (id: string, updated: Partial<ClassRoom>) => {
-    setClasses((prev) => prev.map((c) => (c.id === id ? { ...c, ...updated } : c)));
-
+  const updateClass = async (id: string, updated: Partial<ClassRoom>) => {
     const supabase = getSupabaseClient();
     if (supabase) {
+      console.log('[Supabase DB] Updating class:', id);
       const payload: any = {};
       if (updated.name) payload.name = updated.name;
       if (updated.gradeLevel) payload.grade_level = updated.gradeLevel;
       if (updated.academicYear) payload.academic_year = updated.academicYear;
       if (updated.homeroomTeacherId !== undefined) payload.homeroom_teacher_id = updated.homeroomTeacherId || null;
 
-      supabase.from('classes').update(payload).eq('id', id).then(({ error }: any) => {
-        if (error) console.warn('Supabase update class error:', error);
-      });
+      const { error } = await supabase.from('classes').update(payload).eq('id', id);
+      if (error) {
+        console.error('[Supabase DB Error] Update class failed:', error);
+        showErrorToast(`Gagal memperbarui kelas: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('UBAH_KELAS', `Memperbarui data kelas`);
+        showSuccessToast('Kelas berhasil diperbarui.');
+      }
     }
-
-    logActivity('UBAH_KELAS', `Memperbarui data kelas`);
-    showSuccessToast('Kelas berhasil diperbarui.');
   };
 
-  const deleteClass = (id: string) => {
-    setClasses((prev) => prev.filter((c) => c.id !== id));
-
+  const deleteClass = async (id: string) => {
     const supabase = getSupabaseClient();
     if (supabase) {
-      supabase.from('classes').delete().eq('id', id).then(({ error }: any) => {
-        if (error) console.warn('Supabase delete class error:', error);
-      });
+      console.log('[Supabase DB] Deleting class:', id);
+      const { error } = await supabase.from('classes').delete().eq('id', id);
+      if (error) {
+        console.error('[Supabase DB Error] Delete class failed:', error);
+        showErrorToast(`Gagal menghapus kelas: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('HAPUS_KELAS', `Menghapus kelas`);
+        showSuccessToast('Kelas berhasil dihapus.');
+      }
     }
-
-    logActivity('HAPUS_KELAS', `Menghapus kelas`);
-    showSuccessToast('Kelas berhasil dihapus.');
   };
 
-  const addStudent = (std: Omit<Student, 'id' | 'createdAt'>) => {
-    const cls = classes.find((c) => c.id === std.classId);
-    const newStd: Student = {
-      ...std,
-      className: cls?.name || std.className || '',
-      id: `std_${Date.now()}`,
-      createdAt: new Date().toISOString()
-    };
-    setStudents((prev) => [newStd, ...prev]);
-
+  // Student Actions
+  const addStudent = async (std: Omit<Student, 'id' | 'createdAt'>) => {
     const supabase = getSupabaseClient();
+    const newStdId = `std_${Date.now()}`;
     if (supabase) {
-      supabase.from('students').insert([{
-        id: newStd.id,
-        nis: newStd.nis,
-        full_name: newStd.fullName,
-        gender: newStd.gender,
-        birth_place: newStd.birthPlace || '',
-        birth_date: newStd.birthDate || null,
-        address: newStd.address || '',
-        parent_phone: newStd.parentPhone || '',
-        class_id: newStd.classId || null,
-        created_at: newStd.createdAt
-      }]).then(({ error }: any) => {
-        if (error) console.warn('Supabase add student error:', error);
-      });
-    }
-
-    logActivity('TAMBAH_SISWA', `Menambahkan siswa ${newStd.fullName}`);
-    showSuccessToast('Siswa berhasil ditambahkan.');
-  };
-
-  const bulkAddStudents = (stdsList: Omit<Student, 'id' | 'createdAt'>[]) => {
-    const now = new Date().toISOString();
-    const newStudents: Student[] = stdsList.map((std, idx) => {
-      const cls = classes.find((c) => c.id === std.classId || c.name.toLowerCase() === (std.className || '').toLowerCase());
-      return {
-        ...std,
-        classId: cls?.id || std.classId || '',
-        className: cls?.name || std.className || 'Belum Ada Kelas',
-        id: `std_bulk_${Date.now()}_${idx}`,
-        createdAt: now
-      };
-    });
-
-    setStudents((prev) => [...newStudents, ...prev]);
-
-    const supabase = getSupabaseClient();
-    if (supabase && newStudents.length > 0) {
-      const payload = newStudents.map((std) => ({
-        id: std.id,
+      console.log('[Supabase DB] Adding student:', std.fullName);
+      const { error } = await supabase.from('students').insert([{
+        id: newStdId,
         nis: std.nis,
         full_name: std.fullName,
         gender: std.gender,
@@ -858,34 +637,56 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         address: std.address || '',
         parent_phone: std.parentPhone || '',
         class_id: std.classId || null,
-        created_at: std.createdAt
-      }));
-
-      supabase.from('students').insert(payload).then(({ error }: any) => {
-        if (error) console.warn('Supabase bulk add students error:', error);
-      });
+        created_at: new Date().toISOString()
+      }]);
+      if (error) {
+        console.error('[Supabase DB Error] Insert student failed:', error);
+        showErrorToast(`Gagal menambah siswa: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('TAMBAH_SISWA', `Menambahkan siswa ${std.fullName}`);
+        showSuccessToast('Siswa berhasil ditambahkan.');
+      }
     }
-
-    logActivity('BULK_UPLOAD_SISWA', `Berhasil mengunggah ${newStudents.length} data siswa baru`);
-    showSuccessToast(`Berhasil mengimpor ${newStudents.length} data siswa baru.`);
   };
 
-  const updateStudent = (id: string, updated: Partial<Student>) => {
-    const cls = updated.classId ? classes.find((c) => c.id === updated.classId) : null;
-    setStudents((prev) =>
-      prev.map((s) =>
-        s.id === id
-          ? {
-              ...s,
-              ...updated,
-              className: cls ? cls.name : s.className
-            }
-          : s
-      )
-    );
+  const bulkAddStudents = async (stdsList: Omit<Student, 'id' | 'createdAt'>[]) => {
+    const supabase = getSupabaseClient();
+    if (supabase && stdsList.length > 0) {
+      console.log('[Supabase DB] Bulk inserting students:', stdsList.length);
+      const now = new Date().toISOString();
+      const payload = stdsList.map((std, idx) => {
+        const cls = classes.find((c) => c.id === std.classId || c.name.toLowerCase() === (std.className || '').toLowerCase());
+        return {
+          id: `std_bulk_${Date.now()}_${idx}`,
+          nis: std.nis,
+          full_name: std.fullName,
+          gender: std.gender,
+          birth_place: std.birthPlace || '',
+          birth_date: std.birthDate || null,
+          address: std.address || '',
+          parent_phone: std.parentPhone || '',
+          class_id: cls?.id || std.classId || null,
+          created_at: now
+        };
+      });
 
+      const { error } = await supabase.from('students').insert(payload);
+      if (error) {
+        console.error('[Supabase DB Error] Bulk insert students failed:', error);
+        showErrorToast(`Gagal mengunggah data siswa: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('BULK_UPLOAD_SISWA', `Berhasil mengunggah ${stdsList.length} data siswa baru`);
+        showSuccessToast(`Berhasil mengimpor ${stdsList.length} data siswa baru.`);
+      }
+    }
+  };
+
+  const updateStudent = async (id: string, updated: Partial<Student>) => {
     const supabase = getSupabaseClient();
     if (supabase) {
+      console.log('[Supabase DB] Updating student:', id);
       const payload: any = {};
       if (updated.nis) payload.nis = updated.nis;
       if (updated.fullName) payload.full_name = updated.fullName;
@@ -896,29 +697,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (updated.parentPhone !== undefined) payload.parent_phone = updated.parentPhone;
       if (updated.classId !== undefined) payload.class_id = updated.classId || null;
 
-      supabase.from('students').update(payload).eq('id', id).then(({ error }: any) => {
-        if (error) console.warn('Supabase update student error:', error);
-      });
+      const { error } = await supabase.from('students').update(payload).eq('id', id);
+      if (error) {
+        console.error('[Supabase DB Error] Update student failed:', error);
+        showErrorToast(`Gagal memperbarui data siswa: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('UBAH_SISWA', `Memperbarui data siswa`);
+        showSuccessToast('Data siswa berhasil diperbarui.');
+      }
     }
-
-    logActivity('UBAH_SISWA', `Memperbarui data siswa`);
-    showSuccessToast('Data siswa berhasil diperbarui.');
   };
 
-  const deleteStudent = (id: string) => {
-    setStudents((prev) => prev.filter((s) => s.id !== id));
-
+  const deleteStudent = async (id: string) => {
     const supabase = getSupabaseClient();
     if (supabase) {
-      supabase.from('students').delete().eq('id', id).then(({ error }: any) => {
-        if (error) console.warn('Supabase delete student error:', error);
-      });
+      console.log('[Supabase DB] Deleting student:', id);
+      const { error } = await supabase.from('students').delete().eq('id', id);
+      if (error) {
+        console.error('[Supabase DB Error] Delete student failed:', error);
+        showErrorToast(`Gagal menghapus siswa: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('HAPUS_SISWA', `Menghapus siswa`);
+        showSuccessToast('Data siswa berhasil dihapus.');
+      }
     }
-
-    logActivity('HAPUS_SISWA', `Menghapus siswa`);
-    showSuccessToast('Data siswa berhasil dihapus.');
   };
 
+  // Grade Actions
   const calculateGradeDetails = (tugas: number, harian: number, pts: number, pas: number) => {
     const finalScore = Math.round(tugas * 0.2 + harian * 0.3 + pts * 0.25 + pas * 0.25);
     let predicate: 'A' | 'B' | 'C' | 'D' = 'D';
@@ -930,7 +737,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { finalScore, predicate };
   };
 
-  const saveGrade = (gradeData: Omit<Grade, 'id' | 'finalScore' | 'predicate' | 'updatedAt'>) => {
+  const saveGrade = async (gradeData: Omit<Grade, 'id' | 'finalScore' | 'predicate' | 'updatedAt'>) => {
     const { finalScore, predicate } = calculateGradeDetails(
       gradeData.assignmentScore,
       gradeData.dailyScore,
@@ -938,220 +745,192 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       gradeData.pasScore
     );
 
-    const student = students.find((s) => s.id === gradeData.studentId);
-    const subject = subjects.find((s) => s.id === gradeData.subjectId);
-    const cls = classes.find((c) => c.id === gradeData.classId);
-
-    const existingIndex = grades.findIndex(
+    const existingGrade = grades.find(
       (g) =>
         g.studentId === gradeData.studentId &&
         g.subjectId === gradeData.subjectId &&
         g.semester === gradeData.semester
     );
 
-    const fullGrade: Grade = {
-      ...gradeData,
-      id: existingIndex >= 0 ? grades[existingIndex].id : `grd_${Date.now()}`,
-      studentName: student?.fullName || gradeData.studentName,
-      studentNis: student?.nis || gradeData.studentNis,
-      subjectName: subject?.name || gradeData.subjectName,
-      className: cls?.name || gradeData.className,
-      finalScore,
-      predicate,
-      updatedAt: new Date().toISOString()
-    };
-
-    if (existingIndex >= 0) {
-      setGrades((prev) => prev.map((g, idx) => (idx === existingIndex ? fullGrade : g)));
-    } else {
-      setGrades((prev) => [fullGrade, ...prev]);
-    }
-
+    const fullGradeId = existingGrade ? existingGrade.id : `grd_${Date.now()}`;
     const supabase = getSupabaseClient();
     if (supabase) {
-      supabase.from('grades').upsert([{
-        id: fullGrade.id,
-        student_id: fullGrade.studentId || null,
-        subject_id: fullGrade.subjectId || null,
-        class_id: fullGrade.classId || null,
-        teacher_id: fullGrade.teacherId || null,
-        assignment_score: fullGrade.assignmentScore || 0,
-        daily_score: fullGrade.dailyScore || 0,
-        pts_score: fullGrade.ptsScore || 0,
-        pas_score: fullGrade.pasScore || 0,
-        final_score: fullGrade.finalScore || 0,
-        predicate: fullGrade.predicate,
-        notes: fullGrade.notes || '',
-        academic_year: fullGrade.academicYear,
-        semester: fullGrade.semester,
-        updated_at: fullGrade.updatedAt
-      }]).then(({ error }: any) => {
-        if (error) console.warn('Supabase save grade error:', error);
-      });
+      console.log('[Supabase DB] Saving grade for student:', gradeData.studentId);
+      const { error } = await supabase.from('grades').upsert([{
+        id: fullGradeId,
+        student_id: gradeData.studentId || null,
+        subject_id: gradeData.subjectId || null,
+        class_id: gradeData.classId || null,
+        teacher_id: gradeData.teacherId || null,
+        assignment_score: gradeData.assignmentScore || 0,
+        daily_score: gradeData.dailyScore || 0,
+        pts_score: gradeData.ptsScore || 0,
+        pas_score: gradeData.pasScore || 0,
+        final_score: finalScore,
+        predicate: predicate,
+        notes: gradeData.notes || '',
+        academic_year: gradeData.academicYear,
+        semester: gradeData.semester,
+        updated_at: new Date().toISOString()
+      }]);
+      if (error) {
+        console.error('[Supabase DB Error] Save grade failed:', error);
+        showErrorToast(`Gagal menyimpan nilai: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('INPUT_NILAI', `Menyimpan nilai siswa`);
+        showSuccessToast('Nilai siswa berhasil disimpan.');
+      }
     }
-
-    logActivity('INPUT_NILAI', `Menyimpan nilai ${fullGrade.studentName} (${fullGrade.subjectName})`);
-    showSuccessToast('Nilai siswa berhasil disimpan.');
   };
 
-  const deleteGrade = (id: string) => {
-    setGrades((prev) => prev.filter((g) => g.id !== id));
-
+  const deleteGrade = async (id: string) => {
     const supabase = getSupabaseClient();
     if (supabase) {
-      supabase.from('grades').delete().eq('id', id).then(({ error }: any) => {
-        if (error) console.warn('Supabase delete grade error:', error);
-      });
+      console.log('[Supabase DB] Deleting grade:', id);
+      const { error } = await supabase.from('grades').delete().eq('id', id);
+      if (error) {
+        console.error('[Supabase DB Error] Delete grade failed:', error);
+        showErrorToast(`Gagal menghapus nilai: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('HAPUS_NILAI', `Menghapus rekaman nilai`);
+        showSuccessToast('Nilai berhasil dihapus.');
+      }
     }
-
-    logActivity('HAPUS_NILAI', `Menghapus rekaman nilai`);
-    showSuccessToast('Nilai berhasil dihapus.');
   };
 
-  const saveAttendanceBatch = (records: Omit<Attendance, 'id' | 'createdAt'>[]) => {
-    const newRecords: Attendance[] = records.map((r, index) => {
-      const student = students.find((s) => s.id === r.studentId);
-      return {
-        ...r,
+  // Attendance Actions
+  const saveAttendanceBatch = async (records: Omit<Attendance, 'id' | 'createdAt'>[]) => {
+    const supabase = getSupabaseClient();
+    if (supabase && records.length > 0) {
+      console.log('[Supabase DB] Saving attendance batch:', records.length);
+      const now = new Date().toISOString();
+      const payload = records.map((r, index) => ({
         id: `att_${Date.now()}_${index}`,
-        studentName: student?.fullName,
-        studentNis: student?.nis,
-        createdAt: new Date().toISOString()
-      };
-    });
-
-    setAttendance((prev) => [...newRecords, ...prev]);
-
-    const supabase = getSupabaseClient();
-    if (supabase && newRecords.length > 0) {
-      const payload = newRecords.map((att) => ({
-        id: att.id,
-        date: att.date,
-        student_id: att.studentId || null,
-        class_id: att.classId || null,
-        subject_id: att.subjectId || null,
-        teacher_id: att.teacherId || null,
-        status: att.status,
-        notes: att.notes || '',
-        created_at: att.createdAt
+        date: r.date,
+        student_id: r.studentId || null,
+        class_id: r.classId || null,
+        subject_id: r.subjectId || null,
+        teacher_id: r.teacherId || null,
+        status: r.status,
+        notes: r.notes || '',
+        created_at: now
       }));
-      supabase.from('attendance').insert(payload).then(({ error }: any) => {
-        if (error) console.warn('Supabase save attendance error:', error);
-      });
+      const { error } = await supabase.from('attendance').insert(payload);
+      if (error) {
+        console.error('[Supabase DB Error] Save attendance failed:', error);
+        showErrorToast(`Gagal menyimpan absensi: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('INPUT_ABSENSI', `Memproses absensi untuk ${records.length} siswa`);
+        showSuccessToast(`Berhasil menyimpan absensi ${records.length} siswa.`);
+      }
     }
-
-    logActivity('INPUT_ABSENSI', `Memproses absensi untuk ${records.length} siswa`);
-    showSuccessToast(`Berhasil menyimpan absensi ${records.length} siswa.`);
   };
 
-  const addJournal = (journal: Omit<TeachingJournal, 'id' | 'createdAt'>) => {
-    const subject = subjects.find((s) => s.id === journal.subjectId);
-    const cls = classes.find((c) => c.id === journal.classId);
+  // Journal Actions
+  const addJournal = async (journal: Omit<TeachingJournal, 'id' | 'createdAt'>) => {
+    const supabase = getSupabaseClient();
+    const newJrnId = `jrn_${Date.now()}`;
+    if (supabase) {
+      console.log('[Supabase DB] Adding teaching journal:', journal.topic);
+      const { error } = await supabase.from('teaching_journals').insert([{
+        id: newJrnId,
+        date: journal.date,
+        subject_id: journal.subjectId || null,
+        class_id: journal.classId || null,
+        teacher_id: journal.teacherId || null,
+        time_slot: journal.timeSlot,
+        topic: journal.topic,
+        method: journal.method,
+        attendee_count: journal.attendeeCount || 0,
+        notes: journal.notes || '',
+        attachment_name: journal.attachmentName || null,
+        attachment_drive_id: journal.attachmentDriveId || null,
+        attachment_web_view_link: journal.attachmentWebViewLink || null,
+        attachment_web_content_link: journal.attachmentWebContentLink || null,
+        created_at: new Date().toISOString()
+      }]);
+      if (error) {
+        console.error('[Supabase DB Error] Add journal failed:', error);
+        showErrorToast(`Gagal menyimpan jurnal: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('TAMBAH_JURNAL', `Menambahkan jurnal mengajar ${journal.topic}`);
+        showSuccessToast('Jurnal mengajar berhasil disimpan.');
+      }
+    }
+  };
 
-    const newJrn: TeachingJournal = {
-      ...journal,
-      id: `jrn_${Date.now()}`,
-      subjectName: subject?.name,
-      className: cls?.name,
-      createdAt: new Date().toISOString()
-    };
-
-    setJournals((prev) => [newJrn, ...prev]);
-
+  const deleteJournal = async (id: string) => {
     const supabase = getSupabaseClient();
     if (supabase) {
-      supabase.from('teaching_journals').insert([{
-        id: newJrn.id,
-        date: newJrn.date,
-        subject_id: newJrn.subjectId || null,
-        class_id: newJrn.classId || null,
-        teacher_id: newJrn.teacherId || null,
-        time_slot: newJrn.timeSlot,
-        topic: newJrn.topic,
-        method: newJrn.method,
-        attendee_count: newJrn.attendeeCount || 0,
-        notes: newJrn.notes || '',
-        attachment_name: newJrn.attachmentName || null,
-        attachment_drive_id: newJrn.attachmentDriveId || null,
-        attachment_web_view_link: newJrn.attachmentWebViewLink || null,
-        attachment_web_content_link: newJrn.attachmentWebContentLink || null,
-        created_at: newJrn.createdAt
-      }]).then(({ error }: any) => {
-        if (error) console.warn('Supabase add journal error:', error);
-      });
+      console.log('[Supabase DB] Deleting journal:', id);
+      const { error } = await supabase.from('teaching_journals').delete().eq('id', id);
+      if (error) {
+        console.error('[Supabase DB Error] Delete journal failed:', error);
+        showErrorToast(`Gagal menghapus jurnal: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('HAPUS_JURNAL', `Menghapus jurnal mengajar`);
+        showSuccessToast('Jurnal mengajar berhasil dihapus.');
+      }
     }
-
-    logActivity('TAMBAH_JURNAL', `Menambahkan jurnal mengajar ${newJrn.topic}`);
-    showSuccessToast('Jurnal mengajar berhasil disimpan.');
   };
 
-  const deleteJournal = (id: string) => {
-    setJournals((prev) => prev.filter((j) => j.id !== id));
+  // Module Actions
+  const addModule = async (mod: Omit<TeachingModule, 'id' | 'createdAt'>) => {
+    const supabase = getSupabaseClient();
+    const newModId = `mod_${Date.now()}`;
+    if (supabase) {
+      console.log('[Supabase DB] Adding module:', mod.title);
+      const { error } = await supabase.from('teaching_modules').insert([{
+        id: newModId,
+        title: mod.title,
+        subject_id: mod.subjectId || null,
+        class_level: mod.classLevel,
+        semester: mod.semester,
+        academic_year: mod.academicYear,
+        description: mod.description || '',
+        file_type: mod.fileType,
+        file_name: mod.fileName,
+        file_size: mod.fileSize || '',
+        file_drive_id: mod.fileDriveId,
+        web_view_link: mod.webViewLink,
+        web_content_link: mod.webContentLink,
+        teacher_id: mod.teacherId || null,
+        created_at: new Date().toISOString()
+      }]);
+      if (error) {
+        console.error('[Supabase DB Error] Add module failed:', error);
+        showErrorToast(`Gagal mengunggah modul: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('UPLOAD_MODUL', `Mengunggah arsip modul/RPP ${mod.title}`);
+        showSuccessToast('Arsip Modul Ajar/RPP berhasil diunggah.');
+      }
+    }
+  };
 
+  const deleteModule = async (id: string) => {
     const supabase = getSupabaseClient();
     if (supabase) {
-      supabase.from('teaching_journals').delete().eq('id', id).then(({ error }: any) => {
-        if (error) console.warn('Supabase delete journal error:', error);
-      });
+      console.log('[Supabase DB] Deleting module:', id);
+      const { error } = await supabase.from('teaching_modules').delete().eq('id', id);
+      if (error) {
+        console.error('[Supabase DB Error] Delete module failed:', error);
+        showErrorToast(`Gagal menghapus modul: ${error.message}`);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('HAPUS_MODUL', `Menghapus arsip modul/RPP`);
+        showSuccessToast('Arsip Modul Ajar/RPP dihapus.');
+      }
     }
-
-    logActivity('HAPUS_JURNAL', `Menghapus jurnal mengajar`);
-    showSuccessToast('Jurnal mengajar berhasil dihapus.');
   };
 
-  const addModule = (mod: Omit<TeachingModule, 'id' | 'createdAt'>) => {
-    const subject = subjects.find((s) => s.id === mod.subjectId);
-    const newMod: TeachingModule = {
-      ...mod,
-      id: `mod_${Date.now()}`,
-      subjectName: subject?.name,
-      createdAt: new Date().toISOString()
-    };
-
-    setModules((prev) => [newMod, ...prev]);
-
-    const supabase = getSupabaseClient();
-    if (supabase) {
-      supabase.from('teaching_modules').insert([{
-        id: newMod.id,
-        title: newMod.title,
-        subject_id: newMod.subjectId || null,
-        class_level: newMod.classLevel,
-        semester: newMod.semester,
-        academic_year: newMod.academicYear,
-        description: newMod.description || '',
-        file_type: newMod.fileType,
-        file_name: newMod.fileName,
-        file_size: newMod.fileSize || '',
-        file_drive_id: newMod.fileDriveId,
-        web_view_link: newMod.webViewLink,
-        web_content_link: newMod.webContentLink,
-        teacher_id: newMod.teacherId || null,
-        created_at: newMod.createdAt
-      }]).then(({ error }: any) => {
-        if (error) console.warn('Supabase add module error:', error);
-      });
-    }
-
-    logActivity('UPLOAD_MODUL', `Mengunggah arsip modul/RPP ${newMod.title}`);
-    showSuccessToast('Arsip Modul Ajar/RPP berhasil diunggah.');
-  };
-
-  const deleteModule = (id: string) => {
-    setModules((prev) => prev.filter((m) => m.id !== id));
-
-    const supabase = getSupabaseClient();
-    if (supabase) {
-      supabase.from('teaching_modules').delete().eq('id', id).then(({ error }: any) => {
-        if (error) console.warn('Supabase delete module error:', error);
-      });
-    }
-
-    logActivity('HAPUS_MODUL', `Menghapus arsip modul/RPP`);
-    showSuccessToast('Arsip Modul Ajar/RPP dihapus.');
-  };
-
-  const updateSystemSettings = (updated: Partial<SystemSettings>) => {
+  // System Settings Action
+  const updateSystemSettings = async (updated: Partial<SystemSettings>) => {
     const nextSettings = {
       ...systemSettings,
       ...updated,
@@ -1161,30 +940,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const supabase = getSupabaseClient();
     if (supabase) {
-      supabase.from('system_settings').upsert({
+      const { error } = await supabase.from('system_settings').upsert({
         key: 'main_config',
         value: nextSettings,
         updated_at: nextSettings.updatedAt
-      }).then(({ error }: any) => {
-        if (error) console.warn('Supabase update settings error:', error);
       });
+      if (error) {
+        console.error('[Supabase DB Error] Update system settings failed:', error);
+      } else {
+        await loadDataFromSupabase();
+        logActivity('PENGATURAN_SISTEM', 'Memperbarui Pengaturan Margin Kertas & Kop Surat');
+        showSuccessToast('Pengaturan sistem berhasil diperbarui.');
+      }
     }
-
-    logActivity('PENGATURAN_SISTEM', 'Memperbarui Pengaturan Margin Kertas & Kop Surat');
-    showSuccessToast('Pengaturan sistem berhasil diperbarui.');
   };
 
+  // Reset local state to empty
   const resetAllData = () => {
-    localStorage.removeItem('guruku_teachers');
-    localStorage.removeItem('guruku_subjects');
-    localStorage.removeItem('guruku_classes');
-    localStorage.removeItem('guruku_students');
-    localStorage.removeItem('guruku_grades');
-    localStorage.removeItem('guruku_attendance');
-    localStorage.removeItem('guruku_journals');
-    localStorage.removeItem('guruku_modules');
-    localStorage.removeItem('guruku_logs');
-
     setTeachers([]);
     setSubjects([]);
     setClasses([]);
@@ -1195,8 +967,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setModules([]);
     setActivityLogs([]);
 
-    logActivity('RESET_DATA', 'Mereset seluruh data aplikasi ke kondisi awal (kosong)');
-    showSuccessToast('Seluruh data aplikasi berhasil dibersihkan ke kondisi awal (kosong).');
+    logActivity('RESET_DATA', 'Mereset tampilan data lokal');
+    showSuccessToast('Seluruh data di layar telah dibersihkan.');
   };
 
   return (

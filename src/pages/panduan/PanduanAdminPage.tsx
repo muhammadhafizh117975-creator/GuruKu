@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 
 export const PanduanAdminPage: React.FC = () => {
-  const { systemSettings, updateSystemSettings } = useData();
+  const { systemSettings, updateSystemSettings, teachers } = useData();
 
   const [copiedSql, setCopiedSql] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'supabase' | 'gdrive' | 'checklist'>('supabase');
@@ -58,12 +58,7 @@ export const PanduanAdminPage: React.FC = () => {
       try {
         const rows = await neonSql`SELECT id FROM public.profiles LIMIT 1`;
         if (rows) {
-          const savedTeachersRaw = localStorage.getItem('guruku_teachers');
-          let savedTeachers: Profile[] = [];
-          if (savedTeachersRaw) {
-            try { savedTeachers = JSON.parse(savedTeachersRaw); } catch (err) {}
-          }
-          const allProfs = [...INITIAL_PROFILES, ...savedTeachers];
+          const allProfs = [...INITIAL_PROFILES, ...teachers];
           for (const p of allProfs) {
             await neonSql`
               INSERT INTO public.profiles (id, email, username, password, full_name, role, nip_nuptk, phone, avatar_url, created_at, updated_at)
@@ -85,12 +80,7 @@ export const PanduanAdminPage: React.FC = () => {
       try {
         const { error } = await client.from('profiles').select('id').limit(1);
         if (!error) {
-          const savedTeachersRaw = localStorage.getItem('guruku_teachers');
-          let savedTeachers: Profile[] = [];
-          if (savedTeachersRaw) {
-            try { savedTeachers = JSON.parse(savedTeachersRaw); } catch (err) {}
-          }
-          const allProfs = [...INITIAL_PROFILES, ...savedTeachers];
+          const allProfs = [...INITIAL_PROFILES, ...teachers];
           for (const p of allProfs) {
             await client.from('profiles').upsert({
               id: p.id,
