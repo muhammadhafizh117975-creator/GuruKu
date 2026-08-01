@@ -58,8 +58,10 @@ export const PdfExcelService = {
       headmasterPosition = activePrincipal.position || 'Kepala Sekolah';
     }
 
-    const teacherName = user?.fullName || 'Guru Mata Pelajaran';
+    const isAdmin = user?.role === 'admin';
+    const teacherName = user?.fullName || (isAdmin ? 'Administrator Sistem' : 'Guru Pengajar');
     const teacherNuptk = user?.nipNuptk || '-';
+    const rightRoleTitle = isAdmin ? 'Administrator Sistem' : 'Guru Mata Pelajaran';
 
     // Column positions
     const leftX = leftMargin;
@@ -73,9 +75,9 @@ export const PdfExcelService = {
     doc.text('Mengetahui,', leftX, y);
     doc.text(headmasterPosition, leftX, y + 5);
 
-    // Kanan: Titimangsa & Guru Mata Pelajaran
+    // Kanan: Titimangsa & Role Title
     doc.text(currentDateStr, rightX, y);
-    doc.text('Guru Mata Pelajaran', rightX, y + 5);
+    doc.text(rightRoleTitle, rightX, y + 5);
 
     // Signature Space
     const nameY = y + 28;
@@ -150,19 +152,53 @@ export const PdfExcelService = {
     let currentY = topMargin;
 
     // Draw Kop Surat (Letterhead) if enabled
-    if (settings.letterhead.showInPdf && settings.letterhead.imageUrl) {
-      try {
-        const imgData = await this.getImageBase64(settings.letterhead.imageUrl);
-        if (imgData) {
-          const pageWidth = doc.internal.pageSize.getWidth();
-          const printableWidth = pageWidth - leftMargin - rightMargin;
-          const letterheadHeight = settings.letterhead.heightMm || 30;
+    if (settings?.letterhead?.showInPdf) {
+      if (settings.letterhead.imageUrl) {
+        try {
+          const imgData = await this.getImageBase64(settings.letterhead.imageUrl);
+          if (imgData) {
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const printableWidth = pageWidth - leftMargin - rightMargin;
+            const letterheadHeight = settings.letterhead.heightMm || 30;
 
-          doc.addImage(imgData, 'PNG', leftMargin, currentY, printableWidth, letterheadHeight);
-          currentY += letterheadHeight + 5;
+            doc.addImage(imgData, 'PNG', leftMargin, currentY, printableWidth, letterheadHeight);
+            currentY += letterheadHeight + 5;
+          }
+        } catch (e) {
+          console.warn('Failed to load letterhead image into PDF:', e);
         }
-      } catch (e) {
-        console.warn('Failed to load letterhead image into PDF:', e);
+      } else if (settings.schoolInfo?.schoolName) {
+        // Dynamic text Kop Surat from schoolInfo
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const centerX = pageWidth / 2;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(13);
+        doc.setTextColor(30, 41, 59);
+        doc.text(settings.schoolInfo.schoolName.toUpperCase(), centerX, currentY + 4, { align: 'center' });
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(71, 85, 105);
+        if (settings.schoolInfo.address) {
+          doc.text(settings.schoolInfo.address, centerX, currentY + 9, { align: 'center' });
+        }
+        const contactLine = [
+          settings.schoolInfo.phone ? `Telp: ${settings.schoolInfo.phone}` : '',
+          settings.schoolInfo.email ? `Email: ${settings.schoolInfo.email}` : '',
+          settings.schoolInfo.website ? `Website: ${settings.schoolInfo.website}` : ''
+        ].filter(Boolean).join(' | ');
+        if (contactLine) {
+          doc.text(contactLine, centerX, currentY + 14, { align: 'center' });
+        }
+
+        // Double line separator
+        doc.setLineWidth(0.8);
+        doc.setDrawColor(30, 41, 59);
+        doc.line(leftMargin, currentY + 18, pageWidth - rightMargin, currentY + 18);
+        doc.setLineWidth(0.2);
+        doc.line(leftMargin, currentY + 19, pageWidth - rightMargin, currentY + 19);
+
+        currentY += 24;
       }
     }
 

@@ -228,18 +228,6 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
 
   const isAdmin = user?.role === 'admin';
 
-  if (!isAdmin) {
-    return (
-      <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-8 rounded-3xl text-center space-y-3">
-        <ShieldAlert className="w-12 h-12 text-amber-500 mx-auto" />
-        <h3 className="text-lg font-bold text-amber-900 dark:text-amber-200">Akses Terbatas</h3>
-        <p className="text-sm text-amber-700 dark:text-amber-300">
-          Pengaturan Sistem hanya dapat diakses oleh Administrator Sekolah.
-        </p>
-      </div>
-    );
-  }
-
   // Academic Year Handlers
   const openCreateAyModal = () => {
     setEditingAy(null);
@@ -486,6 +474,13 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">Pusat konfigurasi tahun ajaran, bobot penilaian, dokumen cetak, dan identitas sekolah</p>
         </div>
+
+        {!isAdmin && (
+          <div className="w-full sm:w-auto px-4 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-semibold flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-blue-500 shrink-0" />
+            <span>Mode Lihat Saja (Read-Only) — Konfigurasi dikelola oleh Administrator</span>
+          </div>
+        )}
 
         {/* Tab Switcher */}
         <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl flex-wrap">

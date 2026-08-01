@@ -172,6 +172,7 @@ export interface SchoolInfoSettings {
   city?: string;
   email: string;
   phone: string;
+  website?: string;
   timeZone: string;
   dateFormat: string;
   academicYearActive?: string;
