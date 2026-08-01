@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
-import { AcademicYearItem } from '../../types';
+import { AcademicYearItem, SchoolPrincipal } from '../../types';
 import { GoogleDriveService } from '../../services/googleDrive';
 import { generateSupabaseSQLScript, resetSupabaseClient, resetNeonClient, getSupabaseClient, getNeonSql, INITIAL_PROFILES } from '../../services/supabase';
 import { KopSuratPreview } from '../../components/common/KopSuratPreview';
@@ -39,11 +39,14 @@ import {
   Lock,
   Key,
   Server,
-  Layers
+  Layers,
+  Search,
+  UserCheck,
+  User
 } from 'lucide-react';
 
 interface PengaturanSistemPageProps {
-  defaultTab?: 'akademik' | 'dokumen' | 'sistem' | 'admin' | 'database';
+  defaultTab?: 'akademik' | 'dokumen' | 'sistem' | 'kepala-sekolah' | 'admin' | 'database';
 }
 
 export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defaultTab = 'akademik' }) => {
@@ -58,10 +61,98 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
     setActiveAcademicYear,
     deleteAcademicYear,
     teachers,
+    principals,
+    activePrincipal,
+    addPrincipal,
+    updatePrincipal,
+    deletePrincipal,
+    setActivePrincipal,
     resetAllData
   } = useData();
 
-  const [activeTab, setActiveTab] = useState<'akademik' | 'dokumen' | 'sistem' | 'admin' | 'database'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'akademik' | 'dokumen' | 'sistem' | 'kepala-sekolah' | 'admin' | 'database'>(defaultTab);
+
+  // Principal Management State
+  const [principalSearch, setPrincipalSearch] = useState<string>('');
+  const [isPrincipalModalOpen, setIsPrincipalModalOpen] = useState<boolean>(false);
+  const [editingPrincipal, setEditingPrincipal] = useState<SchoolPrincipal | null>(null);
+  const [pFullName, setPFullName] = useState<string>('');
+  const [pTitle, setPTitle] = useState<string>('');
+  const [pNip, setPNip] = useState<string>('');
+  const [pNuptk, setPNuptk] = useState<string>('');
+  const [pPosition, setPPosition] = useState<string>('Kepala Sekolah');
+  const [pIsActive, setPIsActive] = useState<boolean>(false);
+
+  const handleOpenAddPrincipal = () => {
+    setEditingPrincipal(null);
+    setPFullName('');
+    setPTitle('M.Pd.');
+    setPNip('');
+    setPNuptk('');
+    setPPosition('Kepala Sekolah');
+    setPIsActive(principals.length === 0);
+    setIsPrincipalModalOpen(true);
+  };
+
+  const handleOpenEditPrincipal = (p: SchoolPrincipal) => {
+    setEditingPrincipal(p);
+    setPFullName(p.fullName);
+    setPTitle(p.title || '');
+    setPNip(p.nip || '');
+    setPNuptk(p.nuptk || '');
+    setPPosition(p.position || 'Kepala Sekolah');
+    setPIsActive(p.isActive);
+    setIsPrincipalModalOpen(true);
+  };
+
+  const handleSavePrincipal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pFullName.trim()) {
+      showErrorToast('Nama Kepala Sekolah wajib diisi.');
+      return;
+    }
+    if (editingPrincipal) {
+      await updatePrincipal(editingPrincipal.id, {
+        fullName: pFullName.trim(),
+        title: pTitle.trim(),
+        nip: pNip.trim() || undefined,
+        nuptk: pNuptk.trim(),
+        position: pPosition.trim() || 'Kepala Sekolah',
+        isActive: pIsActive
+      });
+    } else {
+      await addPrincipal({
+        fullName: pFullName.trim(),
+        title: pTitle.trim(),
+        nip: pNip.trim() || undefined,
+        nuptk: pNuptk.trim(),
+        position: pPosition.trim() || 'Kepala Sekolah',
+        isActive: pIsActive
+      });
+    }
+    setIsPrincipalModalOpen(false);
+  };
+
+  const handleDeletePrincipal = async (id: string, name: string) => {
+    const confirmed = await showConfirmModal(
+      'Hapus Data Kepala Sekolah?',
+      `Apakah Anda yakin ingin menghapus data Kepala Sekolah "${name}"?`
+    );
+    if (confirmed) {
+      await deletePrincipal(id);
+    }
+  };
+
+  const filteredPrincipals = principals.filter((p) => {
+    const term = principalSearch.toLowerCase();
+    return (
+      p.fullName.toLowerCase().includes(term) ||
+      (p.title && p.title.toLowerCase().includes(term)) ||
+      (p.nip && p.nip.includes(term)) ||
+      (p.nuptk && p.nuptk.includes(term)) ||
+      (p.position && p.position.toLowerCase().includes(term))
+    );
+  });
 
   // Admin Management State
   const [copiedAdminSql, setCopiedAdminSql] = useState<boolean>(false);
@@ -121,8 +212,11 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
   // 3. School Info & System Regional State
   const [schoolName, setSchoolName] = useState<string>(systemSettings?.schoolInfo?.schoolName ?? 'SMP NEGERI 1 GURUKU ACADEMIA');
   const [schoolAddress, setSchoolAddress] = useState<string>(systemSettings?.schoolInfo?.address ?? 'Jl. Pendidikan No. 45, Kompleks Akademik, Jakarta Selatan');
+  const [schoolCity, setSchoolCity] = useState<string>(systemSettings?.schoolInfo?.city ?? 'Bandung');
   const [schoolEmail, setSchoolEmail] = useState<string>(systemSettings?.schoolInfo?.email ?? 'info@smpn1guruku.sch.id');
   const [schoolPhone, setSchoolPhone] = useState<string>(systemSettings?.schoolInfo?.phone ?? '(021) 7890123');
+  const [headmasterName, setHeadmasterName] = useState<string>(systemSettings?.schoolInfo?.headmasterName ?? 'Dr. H. Ahmad Dahlan, M.Pd.');
+  const [headmasterNip, setHeadmasterNip] = useState<string>(systemSettings?.schoolInfo?.headmasterNip ?? '19700101 199512 1 002');
   const [timeZone, setTimeZone] = useState<string>(systemSettings?.schoolInfo?.timeZone ?? 'Asia/Jakarta (WIB)');
   const [dateFormat, setDateFormat] = useState<string>(systemSettings?.schoolInfo?.dateFormat ?? 'DD/MM/YYYY');
 
@@ -297,12 +391,15 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
       schoolInfo: {
         schoolName,
         address: schoolAddress,
+        city: schoolCity,
         email: schoolEmail,
         phone: schoolPhone,
         timeZone,
         dateFormat,
         academicYearActive: activeAcademicYear.year,
-        semesterActive: activeAcademicYear.semester
+        semesterActive: activeAcademicYear.semester,
+        headmasterName,
+        headmasterNip
       }
     });
     showSuccessToast('Pengaturan Identitas Sekolah & Sistem Regional berhasil diperbarui!');
@@ -423,6 +520,17 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
             }`}
           >
             <Building2 className="w-3.5 h-3.5" /> Pengaturan Sistem
+          </button>
+
+          <button
+            onClick={() => setActiveTab('kepala-sekolah')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'kepala-sekolah'
+                ? 'bg-[#696cff] text-white shadow-xs'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <UserCheck className="w-3.5 h-3.5" /> Data Kepala Sekolah
           </button>
 
           <button
@@ -1023,6 +1131,50 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
                   />
                 </div>
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Kota / Kabupaten Titimangsa Dokumen *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={schoolCity}
+                    onChange={(e) => setSchoolCity(e.target.value)}
+                    placeholder="Contoh: Bandung"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-[#696cff]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Nama Kepala Sekolah *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={headmasterName}
+                    onChange={(e) => setHeadmasterName(e.target.value)}
+                    placeholder="Nama Kepala Sekolah beserta Gelar"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-[#696cff]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    NUPTK / NIP Kepala Sekolah *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={headmasterNip}
+                    onChange={(e) => setHeadmasterNip(e.target.value)}
+                    placeholder="Contoh: 19700101 199512 1 002"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-[#696cff]"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Regional & Timezone */}
@@ -1070,6 +1222,125 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* ------------------- TAB DATA KEPALA SEKOLAH ------------------- */}
+      {activeTab === 'kepala-sekolah' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-slate-100 dark:border-slate-800">
+              <div>
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <UserCheck className="w-5 h-5 text-[#696cff]" /> Data Kepala Sekolah (Tanda Tangan Dokumen)
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Kelola data Kepala Sekolah yang otomatis digunakan pada tanda tangan seluruh laporan & dokumen akademik. Hanya 1 data yang dapat berstatus Aktif.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleOpenAddPrincipal}
+                className="px-4 py-2.5 rounded-2xl bg-[#696cff] hover:bg-[#5f61e6] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 transition-all flex items-center gap-2 shrink-0 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" /> Tambah Kepala Sekolah
+              </button>
+            </div>
+
+            {/* Search & Filter Bar */}
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={principalSearch}
+                  onChange={(e) => setPrincipalSearch(e.target.value)}
+                  placeholder="Cari Kepala Sekolah berdasarkan nama, NUPTK, NIP, atau jabatan..."
+                  className="w-full pl-10 pr-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#696cff]"
+                />
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto rounded-2xl border border-slate-200/80 dark:border-slate-800">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-extrabold uppercase text-[10px] tracking-wider border-b border-slate-200 dark:border-slate-800">
+                    <th className="py-3.5 px-4 text-center">No</th>
+                    <th className="py-3.5 px-4">Nama Lengkap & Gelar</th>
+                    <th className="py-3.5 px-4">NUPTK</th>
+                    <th className="py-3.5 px-4">NIP</th>
+                    <th className="py-3.5 px-4">Jabatan</th>
+                    <th className="py-3.5 px-4 text-center">Status</th>
+                    <th className="py-3.5 px-4 text-center">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 font-medium">
+                  {filteredPrincipals.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-400">
+                        Tidak ada data Kepala Sekolah yang ditemukan.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredPrincipals.map((p, idx) => (
+                      <tr key={p.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                        <td className="py-3.5 px-4 text-center font-bold text-slate-400">{idx + 1}</td>
+                        <td className="py-3.5 px-4 font-bold text-slate-800 dark:text-slate-100">
+                          {p.fullName}{p.title ? `, ${p.title}` : ''}
+                        </td>
+                        <td className="py-3.5 px-4 font-mono">{p.nuptk || '-'}</td>
+                        <td className="py-3.5 px-4 font-mono">{p.nip || '-'}</td>
+                        <td className="py-3.5 px-4">{p.position || 'Kepala Sekolah'}</td>
+                        <td className="py-3.5 px-4 text-center">
+                          {p.isActive ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                              <CheckCircle2 className="w-3 h-3" /> Aktif Utama
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-slate-100 dark:bg-slate-800 text-slate-400 border border-slate-200 dark:border-slate-700">
+                              Tidak Aktif
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {!p.isActive && (
+                              <button
+                                type="button"
+                                onClick={() => setActivePrincipal(p.id)}
+                                title="Setel Sebagai Kepala Sekolah Aktif"
+                                className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 font-bold text-[10px] hover:bg-emerald-100 dark:hover:bg-emerald-900 transition-all cursor-pointer flex items-center gap-1"
+                              >
+                                <CheckCircle2 className="w-3 h-3" /> Aktifkan
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditPrincipal(p)}
+                              title="Edit Data"
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-[#696cff] hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePrincipal(p.id, p.fullName)}
+                              title="Hapus Data"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1634,6 +1905,114 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
               className="px-5 py-2.5 rounded-xl bg-[#696cff] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 hover:bg-[#5f61e6]"
             >
               {editingAy ? 'Simpan Perubahan' : 'Tambah Tahun Pelajaran'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Principal Modal */}
+      <Modal
+        isOpen={isPrincipalModalOpen}
+        onClose={() => setIsPrincipalModalOpen(false)}
+        title={editingPrincipal ? 'Edit Data Kepala Sekolah' : 'Tambah Data Kepala Sekolah Baru'}
+      >
+        <form onSubmit={handleSavePrincipal} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              Nama Lengkap Kepala Sekolah *
+            </label>
+            <input
+              type="text"
+              required
+              value={pFullName}
+              onChange={(e) => setPFullName(e.target.value)}
+              placeholder="Contoh: Dr. H. Ahmad Dahlan"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-[#696cff]"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                Gelar
+              </label>
+              <input
+                type="text"
+                value={pTitle}
+                onChange={(e) => setPTitle(e.target.value)}
+                placeholder="Contoh: M.Pd."
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-[#696cff]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                Jabatan
+              </label>
+              <input
+                type="text"
+                value={pPosition}
+                onChange={(e) => setPPosition(e.target.value)}
+                placeholder="Contoh: Kepala Sekolah"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-[#696cff]"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                NUPTK
+              </label>
+              <input
+                type="text"
+                value={pNuptk}
+                onChange={(e) => setPNuptk(e.target.value)}
+                placeholder="Contoh: 197001011995121002"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-[#696cff]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                NIP (Opsional)
+              </label>
+              <input
+                type="text"
+                value={pNip}
+                onChange={(e) => setPNip(e.target.value)}
+                placeholder="Contoh: 19700101 199512 1 002"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-[#696cff]"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-2">
+            <input
+              type="checkbox"
+              id="pIsActiveCheck"
+              checked={pIsActive}
+              onChange={(e) => setPIsActive(e.target.checked)}
+              className="w-4 h-4 rounded-md text-[#696cff] focus:ring-[#696cff]"
+            />
+            <label htmlFor="pIsActiveCheck" className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
+              Setel Sebagai Kepala Sekolah Aktif Utama
+            </label>
+          </div>
+
+          <div className="pt-3 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setIsPrincipalModalOpen(false)}
+              className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2.5 rounded-xl bg-[#696cff] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 hover:bg-[#5f61e6]"
+            >
+              {editingPrincipal ? 'Simpan Perubahan' : 'Tambah Kepala Sekolah'}
             </button>
           </div>
         </form>

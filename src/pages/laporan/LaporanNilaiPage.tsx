@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { PdfExcelService } from '../../services/pdfExcel';
 import { BarChart3, Download, FileSpreadsheet, Search } from 'lucide-react';
 
 export const LaporanNilaiPage: React.FC = () => {
-  const { subjects, classes, grades, systemSettings } = useData();
+  const { user } = useAuth();
+  const { subjects, classes, grades, systemSettings, activePrincipal } = useData();
 
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('all');
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
@@ -22,7 +24,7 @@ export const LaporanNilaiPage: React.FC = () => {
 
   const handleExportPdf = async () => {
     const subTitle = `Laporan Rekapitulasi Nilai Akademik | Total Records: ${filteredGrades.length}`;
-    await PdfExcelService.exportGradesPdf(filteredGrades, systemSettings, subTitle);
+    await PdfExcelService.exportGradesPdf(filteredGrades, systemSettings, subTitle, user, activePrincipal);
   };
 
   const handleExportExcel = () => {

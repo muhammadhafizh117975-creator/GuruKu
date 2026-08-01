@@ -6,7 +6,7 @@ import { Award, Save, FileSpreadsheet, Download } from 'lucide-react';
 
 export const NilaiPage: React.FC = () => {
   const { user } = useAuth();
-  const { subjects, classes, students, grades, systemSettings, saveGrade, activeAcademicYear } = useData();
+  const { subjects, classes, students, grades, systemSettings, saveGrade, activeAcademicYear, activePrincipal } = useData();
 
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjects[0]?.id || '');
   const [selectedClassId, setSelectedClassId] = useState<string>(classes[0]?.id || '');
@@ -153,7 +153,7 @@ export const NilaiPage: React.FC = () => {
 
   const handleExportPdf = async () => {
     const subTitle = `Mapel: ${currentSubject?.name || '-'} | Kelas: ${currentClass?.name || '-'} | Semester ${semester} T.A. ${academicYear}`;
-    await PdfExcelService.exportGradesPdf(activeGradesForReport, systemSettings, subTitle);
+    await PdfExcelService.exportGradesPdf(activeGradesForReport, systemSettings, subTitle, user, activePrincipal);
   };
 
   const handleExportExcel = () => {

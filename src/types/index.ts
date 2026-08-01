@@ -169,12 +169,29 @@ export interface PredicateThresholds {
 export interface SchoolInfoSettings {
   schoolName: string;
   address: string;
+  city?: string;
   email: string;
   phone: string;
   timeZone: string;
   dateFormat: string;
   academicYearActive?: string;
   semesterActive?: '1' | '2';
+  headmasterName?: string;
+  headmasterNip?: string;
+}
+
+export type UserProfile = Profile;
+
+export interface SchoolPrincipal {
+  id: string;
+  fullName: string;
+  title: string;
+  nip?: string;
+  nuptk: string;
+  position: string; // default: 'Kepala Sekolah'
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DocumentSettings {

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { PdfExcelService } from '../../services/pdfExcel';
 import { BarChart3, Download, FileSpreadsheet, Search } from 'lucide-react';
 
 export const LaporanJurnalPage: React.FC = () => {
-  const { subjects, classes, journals, systemSettings } = useData();
+  const { user } = useAuth();
+  const { subjects, classes, journals, systemSettings, activePrincipal } = useData();
 
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('all');
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
@@ -22,7 +24,7 @@ export const LaporanJurnalPage: React.FC = () => {
 
   const handleExportPdf = async () => {
     const subTitle = `Laporan Rekapitulasi Jurnal Mengajar Guru | Total: ${filteredJournals.length} Entri`;
-    await PdfExcelService.exportJournalsPdf(filteredJournals, systemSettings, subTitle);
+    await PdfExcelService.exportJournalsPdf(filteredJournals, systemSettings, subTitle, user, activePrincipal);
   };
 
   const handleExportExcel = () => {

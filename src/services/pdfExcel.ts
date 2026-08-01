@@ -1,9 +1,109 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import { Grade, Attendance, TeachingJournal, SystemSettings } from '../types';
+import { Grade, Attendance, TeachingJournal, SystemSettings, UserProfile, SchoolPrincipal } from '../types';
 
 export const PdfExcelService = {
+  /**
+   * Helper to format Indonesian Date: e.g. 30 Juli 2026
+   */
+  formatIndonesianDate(date: Date = new Date()): string {
+    const months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    const day = date.getDate();
+    const month = months[date.getMonth()];
+    const year = date.getFullYear();
+    return `${day} ${month} ${year}`;
+  },
+
+  /**
+   * Helper to draw standard document signature block (Kiri: Kepala Sekolah, Kanan: Titimangsa & Guru)
+   */
+  addSignatureBlock(
+    doc: jsPDF,
+    startY: number,
+    settings: SystemSettings,
+    user?: UserProfile | null,
+    activePrincipal?: SchoolPrincipal | null
+  ) {
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = settings.paperMargin;
+    const leftMargin = margin.unit === 'cm' ? margin.left * 10 : margin.left;
+    const rightMargin = margin.unit === 'cm' ? margin.right * 10 : margin.right;
+    const bottomMargin = margin.unit === 'cm' ? margin.bottom * 10 : margin.bottom;
+
+    // Ensure we don't overflow the page, create a new page if necessary
+    const signatureHeight = 45; // mm needed for signatures
+    let y = startY + 8;
+    if (y + signatureHeight > pageHeight - bottomMargin) {
+      doc.addPage();
+      y = margin.unit === 'cm' ? margin.top * 10 : margin.top;
+    }
+
+    const city = settings?.schoolInfo?.city || 'Bandung';
+    const currentDateStr = `${city}, ${this.formatIndonesianDate(new Date())}`;
+    
+    let headmasterName = settings?.schoolInfo?.headmasterName || 'Dr. H. Ahmad Dahlan, M.Pd.';
+    let headmasterNuptk = settings?.schoolInfo?.headmasterNip || '19700101 199512 1 002';
+    let headmasterPosition = 'Kepala Sekolah';
+
+    if (activePrincipal) {
+      headmasterName = activePrincipal.title
+        ? `${activePrincipal.fullName}, ${activePrincipal.title}`
+        : activePrincipal.fullName;
+      headmasterNuptk = activePrincipal.nuptk || activePrincipal.nip || '-';
+      headmasterPosition = activePrincipal.position || 'Kepala Sekolah';
+    }
+
+    const teacherName = user?.fullName || 'Guru Mata Pelajaran';
+    const teacherNuptk = user?.nipNuptk || '-';
+
+    // Column positions
+    const leftX = leftMargin;
+    const rightX = pageWidth - rightMargin - 65; // Align right column nicely
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(40, 40, 40);
+
+    // Kiri: Mengetahui, Kepala Sekolah
+    doc.text('Mengetahui,', leftX, y);
+    doc.text(headmasterPosition, leftX, y + 5);
+
+    // Kanan: Titimangsa & Guru Mata Pelajaran
+    doc.text(currentDateStr, rightX, y);
+    doc.text('Guru Mata Pelajaran', rightX, y + 5);
+
+    // Signature Space
+    const nameY = y + 28;
+
+    // Kiri: (Nama Kepala Sekolah) underlined
+    doc.setFont('helvetica', 'bold');
+    doc.text(`(${headmasterName})`, leftX, nameY);
+    const headmasterWidth = doc.getTextWidth(`(${headmasterName})`);
+    doc.line(leftX, nameY + 1, leftX + headmasterWidth, nameY + 1);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(`NUPTK/NIP. ${headmasterNuptk}`, leftX, nameY + 6);
+
+    // Kanan: (Nama Guru) underlined
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text(`(${teacherName})`, rightX, nameY);
+    const teacherWidth = doc.getTextWidth(`(${teacherName})`);
+    doc.line(rightX, nameY + 1, rightX + teacherWidth, nameY + 1);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(`NUPTK/NIP. ${teacherNuptk}`, rightX, nameY + 6);
+
+    return nameY + 12;
+  },
+
   /**
    * Helper to load an image onto an HTML Canvas or img element to get Base64 format for jsPDF
    */
@@ -80,7 +180,7 @@ export const PdfExcelService = {
   /**
    * Export Rekap Nilai Siswa to PDF
    */
-  async exportGradesPdf(grades: Grade[], settings: SystemSettings, subTitleInfo: string) {
+  async exportGradesPdf(grades: Grade[], settings: SystemSettings, subTitleInfo: string, user?: UserProfile | null, activePrincipal?: SchoolPrincipal | null) {
     const title = 'Laporan Rekapitulasi Nilai Siswa';
     const { doc, currentY, leftMargin } = await this.createConfiguredPdf(settings, title, 'p');
 
@@ -137,6 +237,9 @@ export const PdfExcelService = {
       }
     });
 
+    const finalY = (doc as any).lastAutoTable?.finalY || currentY + 50;
+    this.addSignatureBlock(doc, finalY, settings, user, activePrincipal);
+
     doc.save(`Laporan_Nilai_Siswa_${Date.now()}.pdf`);
   },
 
@@ -170,7 +273,7 @@ export const PdfExcelService = {
   /**
    * Export Rekap Absensi Siswa to PDF
    */
-  async exportAttendancePdf(attendanceRecords: Attendance[], settings: SystemSettings, subTitleInfo: string) {
+  async exportAttendancePdf(attendanceRecords: Attendance[], settings: SystemSettings, subTitleInfo: string, user?: UserProfile | null, activePrincipal?: SchoolPrincipal | null) {
     const title = 'Laporan Rekapitulasi Absensi Siswa';
     const { doc, currentY, leftMargin } = await this.createConfiguredPdf(settings, title, 'p');
 
@@ -218,6 +321,9 @@ export const PdfExcelService = {
       }
     });
 
+    const finalY = (doc as any).lastAutoTable?.finalY || currentY + 50;
+    this.addSignatureBlock(doc, finalY, settings, user, activePrincipal);
+
     doc.save(`Laporan_Absensi_${Date.now()}.pdf`);
   },
 
@@ -243,7 +349,7 @@ export const PdfExcelService = {
   /**
    * Export Jurnal Mengajar to PDF
    */
-  async exportJournalsPdf(journals: TeachingJournal[], settings: SystemSettings, subTitleInfo: string) {
+  async exportJournalsPdf(journals: TeachingJournal[], settings: SystemSettings, subTitleInfo: string, user?: UserProfile | null, activePrincipal?: SchoolPrincipal | null) {
     const title = 'Laporan Jurnal Mengajar Guru';
     const { doc, currentY, leftMargin } = await this.createConfiguredPdf(settings, title, 'l'); // Landscape for rich table
 
@@ -295,6 +401,9 @@ export const PdfExcelService = {
       }
     });
 
+    const finalY = (doc as any).lastAutoTable?.finalY || currentY + 50;
+    this.addSignatureBlock(doc, finalY, settings, user, activePrincipal);
+
     doc.save(`Laporan_Jurnal_Mengajar_${Date.now()}.pdf`);
   },
 
@@ -322,3 +431,4 @@ export const PdfExcelService = {
     XLSX.writeFile(workbook, `Jurnal_Mengajar_${Date.now()}.xlsx`);
   }
 };
+

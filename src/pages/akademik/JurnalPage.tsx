@@ -19,7 +19,7 @@ import {
 
 export const JurnalPage: React.FC = () => {
   const { user } = useAuth();
-  const { subjects, classes, journals, systemSettings, addJournal, deleteJournal } = useData();
+  const { subjects, classes, journals, systemSettings, addJournal, deleteJournal, activePrincipal } = useData();
 
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('all');
@@ -124,7 +124,7 @@ export const JurnalPage: React.FC = () => {
 
   const handleExportPdf = async () => {
     const subTitle = `Filter Laporan Jurnal Mengajar Guru | Total: ${filteredJournals.length} Entri Jurnal`;
-    await PdfExcelService.exportJournalsPdf(filteredJournals, systemSettings, subTitle);
+    await PdfExcelService.exportJournalsPdf(filteredJournals, systemSettings, subTitle, user, activePrincipal);
   };
 
   const handleExportExcel = () => {

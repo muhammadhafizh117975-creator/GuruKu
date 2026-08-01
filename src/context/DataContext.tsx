@@ -11,11 +11,13 @@ import {
   TeachingModule,
   SystemSettings,
   ActivityLog,
-  NotificationItem
+  NotificationItem,
+  SchoolPrincipal
 } from '../types';
 import {
   INITIAL_ACADEMIC_YEARS,
   INITIAL_SYSTEM_SETTINGS,
+  INITIAL_PRINCIPALS,
   getSupabaseClient,
   supabase
 } from '../services/supabase';
@@ -34,12 +36,19 @@ interface DataContextType {
   journals: TeachingJournal[];
   modules: TeachingModule[];
   systemSettings: SystemSettings;
+  principals: SchoolPrincipal[];
+  activePrincipal: SchoolPrincipal | null;
   activityLogs: ActivityLog[];
   notifications: NotificationItem[];
   unreadCount: number;
   isRealtimeConnected: boolean;
 
   // Actions
+  addPrincipal: (p: Omit<SchoolPrincipal, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updatePrincipal: (id: string, p: Partial<SchoolPrincipal>) => Promise<void>;
+  deletePrincipal: (id: string) => Promise<void>;
+  setActivePrincipal: (id: string) => Promise<void>;
+
   markNotificationAsRead: (id: string) => Promise<void>;
   markAllNotificationsAsRead: () => Promise<void>;
   addNotification: (notif: { title: string; message: string; type?: 'info' | 'success' | 'warning' | 'error'; userId?: string }) => Promise<void>;
@@ -98,6 +107,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [journals, setJournals] = useState<TeachingJournal[]>([]);
   const [modules, setModules] = useState<TeachingModule[]>([]);
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(INITIAL_SYSTEM_SETTINGS);
+  const [principals, setPrincipals] = useState<SchoolPrincipal[]>(INITIAL_PRINCIPALS);
+  const [activePrincipalState, setActivePrincipalState] = useState<SchoolPrincipal | null>(INITIAL_PRINCIPALS[0] || null);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([
     {
@@ -230,6 +241,44 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } else if (sysErr) {
         console.warn('[Supabase DB Sync Error] Failed fetching system_settings:', sysErr);
+      }
+
+      // 1b. School Principals
+      const { data: prnData, error: prnErr } = await client.from('school_principals').select('*');
+      if (!prnErr && prnData && prnData.length > 0) {
+        const fetchedPrincipals: SchoolPrincipal[] = prnData.map((p: any) => ({
+          id: p.id,
+          fullName: p.full_name,
+          title: p.title || '',
+          nip: p.nip || '',
+          nuptk: p.nuptk || '',
+          position: p.position || 'Kepala Sekolah',
+          isActive: Boolean(p.is_active),
+          createdAt: p.created_at,
+          updatedAt: p.updated_at
+        }));
+        setPrincipals(fetchedPrincipals);
+        const activePrn = fetchedPrincipals.find((p) => p.isActive) || fetchedPrincipals[0];
+        if (activePrn) {
+          setActivePrincipalState(activePrn);
+        }
+      } else if (!prnErr && prnData && prnData.length === 0) {
+        // Seed default principal if table is empty
+        const initP = INITIAL_PRINCIPALS[0];
+        await client.from('school_principals').insert([{
+          id: initP.id,
+          full_name: initP.fullName,
+          title: initP.title,
+          nip: initP.nip,
+          nuptk: initP.nuptk,
+          position: initP.position,
+          is_active: true,
+          created_at: new Date().toISOString()
+        }]);
+        setPrincipals([initP]);
+        setActivePrincipalState(initP);
+      } else if (prnErr) {
+        console.warn('[Supabase DB Sync Error] Failed fetching school_principals:', prnErr);
       }
 
       // 2. Profiles (Guru)
@@ -861,10 +910,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         full_name: std.fullName,
         gender: std.gender,
         birth_place: std.birthPlace || '',
-        birth_date: std.birthDate || null,
+        birth_date: (std.birthDate && typeof std.birthDate === 'string' && std.birthDate.trim() !== '') ? std.birthDate.split('T')[0] : null,
         address: std.address || '',
         parent_phone: std.parentPhone || '',
-        class_id: std.classId || null,
+        class_id: (std.classId && typeof std.classId === 'string' && std.classId.trim() !== '') ? std.classId : null,
         created_at: new Date().toISOString()
       }]);
       if (error) {
@@ -894,16 +943,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const now = new Date().toISOString();
       const payload = stdsList.map((std, idx) => {
         const cls = classes.find((c) => c.id === std.classId || c.name.toLowerCase() === (std.className || '').toLowerCase());
+        const targetClassId = cls?.id || std.classId;
         return {
           id: `std_bulk_${Date.now()}_${idx}`,
           nis: std.nis,
           full_name: std.fullName,
           gender: std.gender,
           birth_place: std.birthPlace || '',
-          birth_date: std.birthDate || null,
+          birth_date: (std.birthDate && typeof std.birthDate === 'string' && std.birthDate.trim() !== '') ? std.birthDate.split('T')[0] : null,
           address: std.address || '',
           parent_phone: std.parentPhone || '',
-          class_id: cls?.id || std.classId || null,
+          class_id: (targetClassId && typeof targetClassId === 'string' && targetClassId.trim() !== '') ? targetClassId : null,
           created_at: now
         };
       });
@@ -932,14 +982,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('[Supabase DB] Updating student:', id);
       const payload: any = {};
-      if (updated.nis) payload.nis = updated.nis;
-      if (updated.fullName) payload.full_name = updated.fullName;
-      if (updated.gender) payload.gender = updated.gender;
-      if (updated.birthPlace !== undefined) payload.birth_place = updated.birthPlace;
-      if (updated.birthDate !== undefined) payload.birth_date = updated.birthDate || null;
-      if (updated.address !== undefined) payload.address = updated.address;
-      if (updated.parentPhone !== undefined) payload.parent_phone = updated.parentPhone;
-      if (updated.classId !== undefined) payload.class_id = updated.classId || null;
+      if (updated.nis !== undefined) payload.nis = updated.nis;
+      if (updated.fullName !== undefined) payload.full_name = updated.fullName;
+      if (updated.gender !== undefined) payload.gender = updated.gender;
+      if (updated.birthPlace !== undefined) payload.birth_place = updated.birthPlace || '';
+      if (updated.birthDate !== undefined) {
+        payload.birth_date = (updated.birthDate && typeof updated.birthDate === 'string' && updated.birthDate.trim() !== '') ? updated.birthDate.split('T')[0] : null;
+      }
+      if (updated.address !== undefined) payload.address = updated.address || '';
+      if (updated.parentPhone !== undefined) payload.parent_phone = updated.parentPhone || '';
+      if (updated.classId !== undefined) {
+        payload.class_id = (updated.classId && typeof updated.classId === 'string' && updated.classId.trim() !== '') ? updated.classId : null;
+      }
+      payload.updated_at = new Date().toISOString();
 
       const { error } = await client.from('students').update(payload).eq('id', id);
       if (error) {
@@ -1243,6 +1298,139 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // School Principal Actions
+  const addPrincipal = async (p: Omit<SchoolPrincipal, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
+      const newId = `prn_${Date.now()}`;
+      if (p.isActive) {
+        await client.from('school_principals').update({ is_active: false }).neq('id', newId);
+      }
+      const { error } = await client.from('school_principals').insert([{
+        id: newId,
+        full_name: p.fullName,
+        title: p.title || '',
+        nip: p.nip || null,
+        nuptk: p.nuptk || '',
+        position: p.position || 'Kepala Sekolah',
+        is_active: Boolean(p.isActive),
+        created_at: new Date().toISOString()
+      }]);
+      if (error) {
+        console.error('[Supabase DB Error] Insert school_principal failed:', error);
+        showErrorToast(`Gagal menambah data Kepala Sekolah: ${error.message}`);
+        return;
+      }
+      await loadDataFromSupabase();
+      logActivity('TAMBAH_KEPALA_SEKOLAH', `Menambahkan Kepala Sekolah ${p.fullName}`);
+      showSuccessToast('Data Kepala Sekolah berhasil ditambahkan.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] addPrincipal failed:', err);
+      showErrorToast(`Gagal menambah data Kepala Sekolah: ${err.message || err}`);
+    }
+  };
+
+  const updatePrincipal = async (id: string, updated: Partial<SchoolPrincipal>) => {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
+      if (updated.isActive) {
+        await client.from('school_principals').update({ is_active: false }).neq('id', id);
+      }
+      const payload: any = {};
+      if (updated.fullName !== undefined) payload.full_name = updated.fullName;
+      if (updated.title !== undefined) payload.title = updated.title;
+      if (updated.nip !== undefined) payload.nip = updated.nip || null;
+      if (updated.nuptk !== undefined) payload.nuptk = updated.nuptk;
+      if (updated.position !== undefined) payload.position = updated.position;
+      if (updated.isActive !== undefined) payload.is_active = Boolean(updated.isActive);
+      payload.updated_at = new Date().toISOString();
+
+      const { error } = await client.from('school_principals').update(payload).eq('id', id);
+      if (error) {
+        console.error('[Supabase DB Error] Update school_principal failed:', error);
+        showErrorToast(`Gagal memperbarui data Kepala Sekolah: ${error.message}`);
+        return;
+      }
+      await loadDataFromSupabase();
+      logActivity('UBAH_KEPALA_SEKOLAH', `Memperbarui data Kepala Sekolah`);
+      showSuccessToast('Data Kepala Sekolah berhasil diperbarui.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] updatePrincipal failed:', err);
+      showErrorToast(`Gagal memperbarui data Kepala Sekolah: ${err.message || err}`);
+    }
+  };
+
+  const deletePrincipal = async (id: string) => {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
+      const target = principals.find((p) => p.id === id);
+      const { error } = await client.from('school_principals').delete().eq('id', id);
+      if (error) {
+        console.error('[Supabase DB Error] Delete school_principal failed:', error);
+        showErrorToast(`Gagal menghapus data Kepala Sekolah: ${error.message}`);
+        return;
+      }
+      if (target?.isActive && principals.length > 1) {
+        const remaining = principals.filter((p) => p.id !== id);
+        if (remaining.length > 0) {
+          await client.from('school_principals').update({ is_active: true }).eq('id', remaining[0].id);
+        }
+      }
+      await loadDataFromSupabase();
+      logActivity('HAPUS_KEPALA_SEKOLAH', `Menghapus data Kepala Sekolah`);
+      showSuccessToast('Data Kepala Sekolah berhasil dihapus.');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] deletePrincipal failed:', err);
+      showErrorToast(`Gagal menghapus data Kepala Sekolah: ${err.message || err}`);
+    }
+  };
+
+  const setActivePrincipal = async (id: string) => {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
+      await client.from('school_principals').update({ is_active: false }).neq('id', id);
+      const { error } = await client.from('school_principals').update({ is_active: true, updated_at: new Date().toISOString() }).eq('id', id);
+      if (error) {
+        console.error('[Supabase DB Error] Set active school_principal failed:', error);
+        showErrorToast(`Gagal mengaktifkan Kepala Sekolah: ${error.message}`);
+        return;
+      }
+      const activePrn = principals.find((p) => p.id === id);
+      if (activePrn) {
+        const formattedName = activePrn.title ? `${activePrn.fullName}, ${activePrn.title}` : activePrn.fullName;
+        const newSchoolInfo = {
+          ...systemSettings.schoolInfo,
+          headmasterName: formattedName,
+          headmasterNip: activePrn.nuptk || activePrn.nip || ''
+        };
+        const newSysConfig = { ...systemSettings, schoolInfo: newSchoolInfo };
+        await client.from('system_settings').upsert({ key: 'main_config', value: newSysConfig, updated_at: new Date().toISOString() });
+      }
+      await loadDataFromSupabase();
+      logActivity('AKTIFKAN_KEPALA_SEKOLAH', `Mengaktifkan Kepala Sekolah ${activePrn?.fullName || id}`);
+      showSuccessToast(`Kepala Sekolah ${activePrn?.fullName || ''} berhasil diaktifkan.`);
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] setActivePrincipal failed:', err);
+      showErrorToast(`Gagal mengaktifkan Kepala Sekolah: ${err.message || err}`);
+    }
+  };
+
   // System Settings Action
   const updateSystemSettings = async (updated: Partial<SystemSettings>) => {
     const nextSettings = {
@@ -1387,10 +1575,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         journals: visibleJournals,
         modules: visibleModules,
         systemSettings,
+        principals,
+        activePrincipal: activePrincipalState,
         activityLogs,
         notifications,
         unreadCount,
         isRealtimeConnected,
+        addPrincipal,
+        updatePrincipal,
+        deletePrincipal,
+        setActivePrincipal,
         markNotificationAsRead,
         markAllNotificationsAsRead,
         addNotification,

@@ -11,7 +11,8 @@ import {
   TeachingJournal,
   TeachingModule,
   SystemSettings,
-  ActivityLog
+  ActivityLog,
+  SchoolPrincipal
 } from '../types';
 
 export { getNeonSql, resetNeonClient, generateNeonSQLScript };
@@ -90,6 +91,20 @@ export const INITIAL_PROFILES: Profile[] = [
     nipNuptk: '19800101 200501 1 001',
     phone: '081234567890',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
+export const INITIAL_PRINCIPALS: SchoolPrincipal[] = [
+  {
+    id: 'prn_01',
+    fullName: 'Dr. H. Ahmad Dahlan',
+    title: 'M.Pd.',
+    nip: '19700101 199512 1 002',
+    nuptk: '3456789012345678',
+    position: 'Kepala Sekolah',
+    isActive: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   }
@@ -232,35 +247,20 @@ export const supabase = new Proxy({} as SupabaseClient, {
 });
 
 // Master SQL Script untuk Reset Total & Inisialisasi Ulang Supabase Database
+// Master SQL Script untuk Inisialisasi & Migrasi Aman Supabase Database (Non-Destructive)
 export function generateSupabaseSQLScript(): string {
   return `-- ============================================================
--- MASTER RESET & SETUP DATABASE SUPABASE GURUKU APP
+-- AUDIT & MIGRASI AMAN DATABASE SUPABASE GURUKU APP (NON-DESTRUCTIVE)
 -- File: supabase.schema.sql
--- Run this script in Supabase Dashboard -> SQL Editor
+-- Keterangan: Aman dijalankan berkali-kali tanpa menghapus data siswa.
+-- Jalankan di: Supabase Dashboard -> SQL Editor
 -- ============================================================
 
--- 1. DROP EXISTING TABLES & STORAGE POLICIES (TOTAL RESET)
-DROP TABLE IF EXISTS public.teaching_modules CASCADE;
-DROP TABLE IF EXISTS public.teaching_journals CASCADE;
-DROP TABLE IF EXISTS public.attendance CASCADE;
-DROP TABLE IF EXISTS public.grades CASCADE;
-DROP TABLE IF EXISTS public.students CASCADE;
-DROP TABLE IF EXISTS public.classes CASCADE;
-DROP TABLE IF EXISTS public.subjects CASCADE;
-DROP TABLE IF EXISTS public.system_settings CASCADE;
-DROP TABLE IF EXISTS public.profiles CASCADE;
-DROP TABLE IF EXISTS public.notifications CASCADE;
-
--- Drop Storage Policies if exist
-DROP POLICY IF EXISTS "Public Access Modul Ajar" ON storage.objects;
-DROP POLICY IF EXISTS "Public Access Arsip" ON storage.objects;
-DROP POLICY IF EXISTS "Public Access Foto Profil" ON storage.objects;
-
--- 2. EXTENSIONS
+-- 1. EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- 3. FUNCTION TO UPDATE UPDATED_AT TIMESTAMP
+-- 2. TRIGGER FUNCTION UNTUK UPDATED_AT TIMESTAMP
 CREATE OR REPLACE FUNCTION public.handle_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -269,14 +269,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 4. TABEL PROFILES (AKUN USER/GURU/ADMIN/SUPER_ADMIN)
-CREATE TABLE public.profiles (
+-- 3. AUDIT & MIGRASI TABEL PROFILES
+CREATE TABLE IF NOT EXISTS public.profiles (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   email TEXT UNIQUE NOT NULL,
   username TEXT UNIQUE,
   password TEXT,
   full_name TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('super_admin', 'admin', 'guru')),
+  role TEXT NOT NULL DEFAULT 'guru',
   nip_nuptk TEXT,
   phone TEXT,
   avatar_url TEXT,
@@ -285,20 +285,30 @@ CREATE TABLE public.profiles (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Trigger updated_at pada Profiles
-CREATE TRIGGER set_profiles_updated_at
-  BEFORE UPDATE ON public.profiles
-  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS username TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS password TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'guru';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS nip_nuptk TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_drive_id TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
--- Seed Default Admin & Super Admin Profile
+-- Seed Default Admin & Super Admin Profile jika belum ada
 INSERT INTO public.profiles (id, email, username, password, full_name, role, nip_nuptk, phone)
 VALUES 
   ('user_superadmin_01', 'superadmin@guruku.sch.id', 'superadmin', 'super123', 'Super Admin Utama', 'super_admin', '19750101 199801 1 001', '081111111111'),
   ('user_admin_01', 'admin@guruku.sch.id', 'admin', 'admin123', 'Administrator Sekolah', 'admin', '19800101 200501 1 001', '081234567890')
 ON CONFLICT (id) DO NOTHING;
 
--- 5. TABEL SUBJECTS (MATA PELAJARAN)
-CREATE TABLE public.subjects (
+DROP TRIGGER IF EXISTS set_profiles_updated_at ON public.profiles;
+CREATE TRIGGER set_profiles_updated_at
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- 4. AUDIT & MIGRASI TABEL SUBJECTS (MATA PELAJARAN)
+CREATE TABLE IF NOT EXISTS public.subjects (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   code TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL,
@@ -308,12 +318,19 @@ CREATE TABLE public.subjects (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.subjects ADD COLUMN IF NOT EXISTS code TEXT;
+ALTER TABLE public.subjects ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE public.subjects ADD COLUMN IF NOT EXISTS teacher_ids TEXT[] DEFAULT '{}';
+ALTER TABLE public.subjects ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.subjects ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+DROP TRIGGER IF EXISTS set_subjects_updated_at ON public.subjects;
 CREATE TRIGGER set_subjects_updated_at
   BEFORE UPDATE ON public.subjects
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- 6. TABEL CLASSES (KELAS & TINGKATAN)
-CREATE TABLE public.classes (
+-- 5. AUDIT & MIGRASI TABEL CLASSES (KELAS)
+CREATE TABLE IF NOT EXISTS public.classes (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   name TEXT NOT NULL,
   grade_level TEXT NOT NULL,
@@ -323,12 +340,17 @@ CREATE TABLE public.classes (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.classes ADD COLUMN IF NOT EXISTS homeroom_teacher_id TEXT;
+ALTER TABLE public.classes ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.classes ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+DROP TRIGGER IF EXISTS set_classes_updated_at ON public.classes;
 CREATE TRIGGER set_classes_updated_at
   BEFORE UPDATE ON public.classes
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- 7. TABEL STUDENTS (DATA SISWA)
-CREATE TABLE public.students (
+-- 6. AUDIT & MIGRASI AMAN TABEL STUDENTS (DATA SISWA)
+CREATE TABLE IF NOT EXISTS public.students (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   nis TEXT UNIQUE NOT NULL,
   full_name TEXT NOT NULL,
@@ -338,16 +360,85 @@ CREATE TABLE public.students (
   address TEXT,
   parent_phone TEXT,
   class_id TEXT REFERENCES public.classes(id) ON DELETE SET NULL,
+  grade_id TEXT,
+  academic_year_id TEXT,
+  status TEXT DEFAULT 'Aktif' CHECK (status IN ('Aktif', 'Lulus', 'Pindah', 'Keluar')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Penambahan Kolom Secara Aman (IF NOT EXISTS)
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS nis TEXT;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS full_name TEXT;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS gender CHAR(1);
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS birth_place TEXT;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS birth_date DATE;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS parent_phone TEXT;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS class_id TEXT;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS grade_id TEXT;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS academic_year_id TEXT;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Aktif';
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+-- Sinkronisasi Kolom 'alamat' jika sebelumnya dibuat dengan nama 'alamat'
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'students' AND column_name = 'alamat'
+  ) THEN
+    UPDATE public.students SET address = alamat WHERE address IS NULL AND alamat IS NOT NULL;
+  END IF;
+END $$;
+
+-- Penambahan Constraint & Safe Check
+DO $$
+BEGIN
+  -- Foreign key class_id
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'fk_students_class' AND table_name = 'students'
+  ) THEN
+    ALTER TABLE public.students 
+    ADD CONSTRAINT fk_students_class FOREIGN KEY (class_id) REFERENCES public.classes(id) ON DELETE SET NULL;
+  END IF;
+
+  -- Constraint Gender Validation
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'chk_students_gender' AND table_name = 'students'
+  ) THEN
+    ALTER TABLE public.students 
+    ADD CONSTRAINT chk_students_gender CHECK (gender IS NULL OR gender IN ('L', 'P'));
+  END IF;
+
+  -- Constraint Status Validation
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'chk_students_status' AND table_name = 'students'
+  ) THEN
+    ALTER TABLE public.students 
+    ADD CONSTRAINT chk_students_status CHECK (status IS NULL OR status IN ('Aktif', 'Lulus', 'Pindah', 'Keluar'));
+  END IF;
+END $$;
+
+-- Trigger updated_at pada Students
+DROP TRIGGER IF EXISTS set_students_updated_at ON public.students;
 CREATE TRIGGER set_students_updated_at
   BEFORE UPDATE ON public.students
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- 8. TABEL GRADES (NILAI SISWA)
-CREATE TABLE public.grades (
+-- Index Performa untuk Tabel Students
+CREATE INDEX IF NOT EXISTS idx_students_nis ON public.students(nis);
+CREATE INDEX IF NOT EXISTS idx_students_class_id ON public.students(class_id);
+CREATE INDEX IF NOT EXISTS idx_students_grade_id ON public.students(grade_id);
+CREATE INDEX IF NOT EXISTS idx_students_academic_year_id ON public.students(academic_year_id);
+CREATE INDEX IF NOT EXISTS idx_students_status ON public.students(status);
+
+-- 7. TABEL GRADES (NILAI SISWA)
+CREATE TABLE IF NOT EXISTS public.grades (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   student_id TEXT REFERENCES public.students(id) ON DELETE CASCADE,
   subject_id TEXT REFERENCES public.subjects(id) ON DELETE CASCADE,
@@ -366,12 +457,13 @@ CREATE TABLE public.grades (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS set_grades_updated_at ON public.grades;
 CREATE TRIGGER set_grades_updated_at
   BEFORE UPDATE ON public.grades
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- 9. TABEL ATTENDANCE (PRESENSI / ABSENSI SISWA)
-CREATE TABLE public.attendance (
+-- 8. TABEL ATTENDANCE (PRESENSI SISWA)
+CREATE TABLE IF NOT EXISTS public.attendance (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   date DATE NOT NULL,
   student_id TEXT REFERENCES public.students(id) ON DELETE CASCADE,
@@ -384,12 +476,13 @@ CREATE TABLE public.attendance (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS set_attendance_updated_at ON public.attendance;
 CREATE TRIGGER set_attendance_updated_at
   BEFORE UPDATE ON public.attendance
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- 10. TABEL TEACHING_JOURNALS (JURNAL MENGAJAR GURU)
-CREATE TABLE public.teaching_journals (
+-- 9. TABEL TEACHING_JOURNALS (JURNAL MENGAJAR GURU)
+CREATE TABLE IF NOT EXISTS public.teaching_journals (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   date DATE NOT NULL,
   subject_id TEXT REFERENCES public.subjects(id) ON DELETE CASCADE,
@@ -408,12 +501,13 @@ CREATE TABLE public.teaching_journals (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS set_teaching_journals_updated_at ON public.teaching_journals;
 CREATE TRIGGER set_teaching_journals_updated_at
   BEFORE UPDATE ON public.teaching_journals
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- 11. TABEL TEACHING_MODULES (ARSIP MODUL AJAR / RPP)
-CREATE TABLE public.teaching_modules (
+-- 10. TABEL TEACHING_MODULES (ARSIP MODUL AJAR / RPP)
+CREATE TABLE IF NOT EXISTS public.teaching_modules (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   title TEXT NOT NULL,
   subject_id TEXT REFERENCES public.subjects(id) ON DELETE CASCADE,
@@ -432,19 +526,44 @@ CREATE TABLE public.teaching_modules (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS set_teaching_modules_updated_at ON public.teaching_modules;
 CREATE TRIGGER set_teaching_modules_updated_at
   BEFORE UPDATE ON public.teaching_modules
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- 12. TABEL SYSTEM_SETTINGS (PENGATURAN KOP SURAT, MARGIN, TAHUN AJARAN)
-CREATE TABLE public.system_settings (
+-- 11. TABEL SYSTEM_SETTINGS
+CREATE TABLE IF NOT EXISTS public.system_settings (
   key TEXT PRIMARY KEY,
   value JSONB NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 13. TABEL NOTIFICATIONS (NOTIFIKASI ADMINISTRATOR / REALTIME)
-CREATE TABLE public.notifications (
+-- 12. TABEL SCHOOL_PRINCIPALS (DATA KEPALA SEKOLAH)
+CREATE TABLE IF NOT EXISTS public.school_principals (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  full_name TEXT NOT NULL,
+  title TEXT,
+  nip TEXT,
+  nuptk TEXT,
+  position TEXT DEFAULT 'Kepala Sekolah',
+  is_active BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Seed Default Principal jika belum ada
+INSERT INTO public.school_principals (id, full_name, title, nip, nuptk, position, is_active)
+VALUES 
+  ('prn_01', 'Dr. H. Ahmad Dahlan', 'M.Pd.', '19700101 199512 1 002', '3456789012345678', 'Kepala Sekolah', true)
+ON CONFLICT (id) DO NOTHING;
+
+DROP TRIGGER IF EXISTS set_school_principals_updated_at ON public.school_principals;
+CREATE TRIGGER set_school_principals_updated_at
+  BEFORE UPDATE ON public.school_principals
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- 13. TABEL NOTIFICATIONS
+CREATE TABLE IF NOT EXISTS public.notifications (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id TEXT,
   title TEXT NOT NULL,
@@ -454,26 +573,7 @@ CREATE TABLE public.notifications (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 14. SUPABASE STORAGE BUCKETS SETUP
-INSERT INTO storage.buckets (id, name, public)
-VALUES 
-  ('modul-ajar', 'modul-ajar', true),
-  ('arsip', 'arsip', true),
-  ('foto-profil', 'foto-profil', true)
-ON CONFLICT (id) DO UPDATE SET public = true;
-
--- Storage Policies
-CREATE POLICY "Public Read/Write Modul Ajar" ON storage.objects
-  FOR ALL USING (bucket_id = 'modul-ajar') WITH CHECK (bucket_id = 'modul-ajar');
-
-CREATE POLICY "Public Read/Write Arsip" ON storage.objects
-  FOR ALL USING (bucket_id = 'arsip') WITH CHECK (bucket_id = 'arsip');
-
-CREATE POLICY "Public Read/Write Foto Profil" ON storage.objects
-  FOR ALL USING (bucket_id = 'foto-profil') WITH CHECK (bucket_id = 'foto-profil');
-
--- 14. INDEXES UNTUK PERFORMA OPTIMAL
-CREATE INDEX IF NOT EXISTS idx_students_class_id ON public.students(class_id);
+-- 14. INDEXES UNTUK KINERJA QUERY DENGAN KECEPATAN TINGGI
 CREATE INDEX IF NOT EXISTS idx_grades_student_id ON public.grades(student_id);
 CREATE INDEX IF NOT EXISTS idx_grades_subject_id ON public.grades(subject_id);
 CREATE INDEX IF NOT EXISTS idx_grades_class_id ON public.grades(class_id);
@@ -481,8 +581,9 @@ CREATE INDEX IF NOT EXISTS idx_attendance_date ON public.attendance(date);
 CREATE INDEX IF NOT EXISTS idx_attendance_student_id ON public.attendance(student_id);
 CREATE INDEX IF NOT EXISTS idx_journals_date ON public.teaching_journals(date);
 CREATE INDEX IF NOT EXISTS idx_modules_subject_id ON public.teaching_modules(subject_id);
+CREATE INDEX IF NOT EXISTS idx_principals_is_active ON public.school_principals(is_active);
 
--- 15. ROW LEVEL SECURITY (RLS) POLICIES
+-- 15. ROW LEVEL SECURITY (RLS) POLICIES PERMISSION (RBAC)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subjects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.classes ENABLE ROW LEVEL SECURITY;
@@ -492,6 +593,18 @@ ALTER TABLE public.attendance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.teaching_journals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.teaching_modules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.school_principals ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow full access on profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow full access on subjects" ON public.subjects;
+DROP POLICY IF EXISTS "Allow full access on classes" ON public.classes;
+DROP POLICY IF EXISTS "Allow full access on students" ON public.students;
+DROP POLICY IF EXISTS "Allow full access on grades" ON public.grades;
+DROP POLICY IF EXISTS "Allow full access on attendance" ON public.attendance;
+DROP POLICY IF EXISTS "Allow full access on teaching_journals" ON public.teaching_journals;
+DROP POLICY IF EXISTS "Allow full access on teaching_modules" ON public.teaching_modules;
+DROP POLICY IF EXISTS "Allow full access on system_settings" ON public.system_settings;
+DROP POLICY IF EXISTS "Allow full access on school_principals" ON public.school_principals;
 
 CREATE POLICY "Allow full access on profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow full access on subjects" ON public.subjects FOR ALL USING (true) WITH CHECK (true);
@@ -502,11 +615,9 @@ CREATE POLICY "Allow full access on attendance" ON public.attendance FOR ALL USI
 CREATE POLICY "Allow full access on teaching_journals" ON public.teaching_journals FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow full access on teaching_modules" ON public.teaching_modules FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow full access on system_settings" ON public.system_settings FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow full access on school_principals" ON public.school_principals FOR ALL USING (true) WITH CHECK (true);
 
--- 16. SUPABASE REALTIME PUBLICATION
-BEGIN;
-  DROP PUBLICATION IF EXISTS supabase_realtime;
-  CREATE PUBLICATION supabase_realtime FOR ALL TABLES;
-COMMIT;
+-- 15. REFRESH SCHEMA CACHE POSTGREST / SUPABASE
+NOTIFY pgrst, 'reload schema';
 `;
 }

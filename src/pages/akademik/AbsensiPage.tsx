@@ -13,7 +13,7 @@ import {
 
 export const AbsensiPage: React.FC = () => {
   const { user } = useAuth();
-  const { subjects, classes, students, attendance, systemSettings, saveAttendanceBatch } = useData();
+  const { subjects, classes, students, attendance, systemSettings, saveAttendanceBatch, activePrincipal } = useData();
 
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjects[0]?.id || '');
   const [selectedClassId, setSelectedClassId] = useState<string>(classes[0]?.id || '');
@@ -124,7 +124,7 @@ export const AbsensiPage: React.FC = () => {
 
   const handleExportPdf = async () => {
     const subTitle = `Mata Pelajaran: ${currentSubject?.name || '-'} | Kelas: ${currentClass?.name || '-'} | Tanggal: ${date}`;
-    await PdfExcelService.exportAttendancePdf(currentRecordsForReport, systemSettings, subTitle);
+    await PdfExcelService.exportAttendancePdf(currentRecordsForReport, systemSettings, subTitle, user, activePrincipal);
   };
 
   const handleExportExcel = () => {
