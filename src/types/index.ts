@@ -47,10 +47,10 @@ export interface Student {
   nis: string;
   fullName: string;
   gender: 'L' | 'P'; // Laki-laki / Perempuan
-  birthPlace: string;
-  birthDate: string;
-  address: string;
-  parentPhone: string;
+  birthPlace?: string;
+  birthDate?: string;
+  address?: string;
+  parentPhone?: string;
   classId: string;
   className?: string;
   createdAt: string;

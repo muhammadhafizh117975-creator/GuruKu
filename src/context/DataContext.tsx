@@ -351,10 +351,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             nis: s.nis,
             fullName: s.full_name,
             gender: s.gender,
-            birthPlace: s.birth_place,
-            birthDate: s.birth_date,
-            address: s.address,
-            parentPhone: s.parent_phone,
             classId: s.class_id || '',
             className: cls ? cls.name : 'Belum Ada Kelas',
             createdAt: s.created_at
@@ -909,10 +905,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         nis: std.nis,
         full_name: std.fullName,
         gender: std.gender,
-        birth_place: std.birthPlace || '',
-        birth_date: (std.birthDate && typeof std.birthDate === 'string' && std.birthDate.trim() !== '') ? std.birthDate.split('T')[0] : null,
-        address: std.address || '',
-        parent_phone: std.parentPhone || '',
         class_id: (std.classId && typeof std.classId === 'string' && std.classId.trim() !== '') ? std.classId : null,
         created_at: new Date().toISOString()
       }]);
@@ -949,10 +941,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           nis: std.nis,
           full_name: std.fullName,
           gender: std.gender,
-          birth_place: std.birthPlace || '',
-          birth_date: (std.birthDate && typeof std.birthDate === 'string' && std.birthDate.trim() !== '') ? std.birthDate.split('T')[0] : null,
-          address: std.address || '',
-          parent_phone: std.parentPhone || '',
           class_id: (targetClassId && typeof targetClassId === 'string' && targetClassId.trim() !== '') ? targetClassId : null,
           created_at: now
         };
@@ -985,12 +973,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (updated.nis !== undefined) payload.nis = updated.nis;
       if (updated.fullName !== undefined) payload.full_name = updated.fullName;
       if (updated.gender !== undefined) payload.gender = updated.gender;
-      if (updated.birthPlace !== undefined) payload.birth_place = updated.birthPlace || '';
-      if (updated.birthDate !== undefined) {
-        payload.birth_date = (updated.birthDate && typeof updated.birthDate === 'string' && updated.birthDate.trim() !== '') ? updated.birthDate.split('T')[0] : null;
-      }
-      if (updated.address !== undefined) payload.address = updated.address || '';
-      if (updated.parentPhone !== undefined) payload.parent_phone = updated.parentPhone || '';
       if (updated.classId !== undefined) {
         payload.class_id = (updated.classId && typeof updated.classId === 'string' && updated.classId.trim() !== '') ? updated.classId : null;
       }

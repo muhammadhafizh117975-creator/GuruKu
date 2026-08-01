@@ -17,8 +17,20 @@ import {
   FileSpreadsheet,
   Info,
   CheckCircle2,
+  AlertCircle,
   Users
 } from 'lucide-react';
+
+interface BulkImportRow {
+  rowNum: number;
+  nis: string;
+  fullName: string;
+  gender: 'L' | 'P';
+  classId: string;
+  className: string;
+  isValid: boolean;
+  errors: string[];
+}
 
 export const SiswaPage: React.FC = () => {
   const { user } = useAuth();
@@ -41,7 +53,8 @@ export const SiswaPage: React.FC = () => {
   // Bulk Upload State
   const [rawText, setRawText] = useState<string>('');
   const [bulkClassId, setBulkClassId] = useState<string>('');
-  const [parsedPreview, setParsedPreview] = useState<Omit<Student, 'id' | 'createdAt'>[]>([]);
+  const [importRows, setImportRows] = useState<BulkImportRow[]>([]);
+  const [hasPreviewed, setHasPreviewed] = useState<boolean>(false);
 
   const openCreateModal = () => {
     setEditingStudent(null);
@@ -63,7 +76,8 @@ export const SiswaPage: React.FC = () => {
 
   const openBulkModal = () => {
     setRawText('');
-    setParsedPreview([]);
+    setImportRows([]);
+    setHasPreviewed(false);
     setBulkClassId(classes[0]?.id || '');
     setIsBulkModalOpen(true);
   };
@@ -74,24 +88,16 @@ export const SiswaPage: React.FC = () => {
 
     if (editingStudent) {
       updateStudent(editingStudent.id, {
-        nis,
-        fullName,
+        nis: nis.trim(),
+        fullName: fullName.replace(/\s+/g, ' ').trim(),
         gender,
-        birthPlace: editingStudent.birthPlace || 'Jakarta',
-        birthDate: editingStudent.birthDate || '2012-01-01',
-        address: editingStudent.address || '',
-        parentPhone: editingStudent.parentPhone || '',
         classId
       });
     } else {
       addStudent({
-        nis,
-        fullName,
+        nis: nis.trim(),
+        fullName: fullName.replace(/\s+/g, ' ').trim(),
         gender,
-        birthPlace: 'Jakarta',
-        birthDate: '2012-01-01',
-        address: '',
-        parentPhone: '',
         classId
       });
     }
@@ -104,45 +110,99 @@ export const SiswaPage: React.FC = () => {
       return;
     }
 
-    const lines = rawText.split('\n').filter((l) => l.trim() !== '');
+    const lines = rawText.split('\n').map((l) => l.trim()).filter((l) => l !== '');
     const selectedClass = classes.find((c) => c.id === bulkClassId);
-    const parsed: Omit<Student, 'id' | 'createdAt'>[] = [];
+    const className = selectedClass ? selectedClass.name : 'Tanpa Kelas';
+
+    const seenNisInFile = new Set<string>();
+    const existingNisSet = new Set(students.map((s) => s.nis.trim().toLowerCase()));
+
+    const parsed: BulkImportRow[] = [];
 
     lines.forEach((line, idx) => {
-      // Split by tab or comma
-      const parts = line.includes('\t') ? line.split('\t') : line.split(',');
-      if (parts.length >= 2) {
-        const cleanNis = parts[0]?.trim() || `2026${100 + idx}`;
-        const cleanName = parts[1]?.trim() || '';
-        const cleanGender = (parts[2]?.trim().toUpperCase() === 'P' ? 'P' : 'L') as 'L' | 'P';
-        const cleanPlace = parts[3]?.trim() || 'Jakarta';
-        const cleanDate = parts[4]?.trim() || '2012-01-01';
-        const cleanAddress = parts[5]?.trim() || 'Alamat Belum Diisi';
-        const cleanPhone = parts[6]?.trim() || '081200000000';
+      let parts: string[] = [];
 
-        if (cleanName) {
-          parsed.push({
-            nis: cleanNis,
-            fullName: cleanName,
-            gender: cleanGender,
-            birthPlace: cleanPlace,
-            birthDate: cleanDate,
-            address: cleanAddress,
-            parentPhone: cleanPhone,
-            classId: bulkClassId,
-            className: selectedClass?.name || 'Tanpa Kelas'
-          });
+      if (line.includes('\t')) {
+        parts = line.split('\t');
+      } else if (line.includes(';')) {
+        parts = line.split(';');
+      } else if (line.includes(',')) {
+        parts = line.split(',');
+      } else {
+        parts = line.split(/\s{2,}/);
+        if (parts.length < 3) {
+          const regexMatch = line.match(/^(\S+)\s+(.+)\s+(\S+)$/);
+          if (regexMatch) {
+            parts = [regexMatch[1], regexMatch[2], regexMatch[3]];
+          }
         }
       }
+
+      const rawNis = (parts[0] || '').trim();
+      const rawName = (parts[1] || '').replace(/\s+/g, ' ').trim();
+      const rawGender = (parts[2] || '').trim();
+
+      const errors: string[] = [];
+
+      // 1. NIS Validation
+      if (!rawNis) {
+        errors.push('NIS wajib diisi');
+      } else {
+        const nisKey = rawNis.toLowerCase();
+        if (seenNisInFile.has(nisKey)) {
+          errors.push('NIS duplikat dalam file impor');
+        } else {
+          seenNisInFile.add(nisKey);
+        }
+
+        if (existingNisSet.has(nisKey)) {
+          errors.push('NIS sudah terdaftar di database');
+        }
+      }
+
+      // 2. Nama Lengkap Validation
+      if (!rawName) {
+        errors.push('Nama Lengkap wajib diisi');
+      }
+
+      // 3. Gender Validation
+      let normalizedGender: 'L' | 'P' = 'L';
+      const upperGen = rawGender.toUpperCase();
+      if (upperGen === 'L' || upperGen === 'LAKI-LAKI' || upperGen === 'LAKI LAKI' || upperGen === 'LAKI') {
+        normalizedGender = 'L';
+      } else if (upperGen === 'P' || upperGen === 'PEREMPUAN') {
+        normalizedGender = 'P';
+      } else if (!rawGender) {
+        errors.push('Gender wajib diisi (L/P)');
+      } else {
+        errors.push("Gender harus 'L' atau 'P'");
+      }
+
+      const isValid = errors.length === 0;
+
+      parsed.push({
+        rowNum: idx + 1,
+        nis: rawNis,
+        fullName: rawName,
+        gender: normalizedGender,
+        classId: bulkClassId,
+        className,
+        isValid,
+        errors
+      });
     });
 
-    if (parsed.length === 0) {
-      showErrorToast('Format data tidak sesuai. Pastikan format: NIS, Nama, Gender(L/P), Tempat Lahir, Tgl Lahir, Alamat, No HP');
-      return;
-    }
+    setImportRows(parsed);
+    setHasPreviewed(true);
 
-    setParsedPreview(parsed);
-    showSuccessToast(`${parsed.length} baris data siswa berhasil diproses.`);
+    const validCount = parsed.filter((r) => r.isValid).length;
+    const invalidCount = parsed.filter((r) => !r.isValid).length;
+
+    if (validCount > 0) {
+      showSuccessToast(`${validCount} baris data valid siap diimpor.${invalidCount > 0 ? ` (${invalidCount} data tidak valid)` : ''}`);
+    } else {
+      showErrorToast(`Tidak ada data valid yang dapat diimpor. Periksa detail kesalahan pada pratinjau.`);
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -159,9 +219,22 @@ export const SiswaPage: React.FC = () => {
     reader.readAsText(file);
   };
 
-  const handleConfirmBulkUpload = () => {
-    if (parsedPreview.length === 0) return;
-    bulkAddStudents(parsedPreview);
+  const handleConfirmBulkUpload = async () => {
+    const validRows = importRows.filter((r) => r.isValid);
+    if (validRows.length === 0) {
+      showErrorToast('Tidak ada data valid yang siap disimpan.');
+      return;
+    }
+
+    const payload: Omit<Student, 'id' | 'createdAt'>[] = validRows.map((r) => ({
+      nis: r.nis,
+      fullName: r.fullName,
+      gender: r.gender,
+      classId: r.classId,
+      className: r.className
+    }));
+
+    await bulkAddStudents(payload);
     setIsBulkModalOpen(false);
   };
 
@@ -176,14 +249,18 @@ export const SiswaPage: React.FC = () => {
     }
   };
 
+  const validRowsCount = importRows.filter((r) => r.isValid).length;
+  const invalidRowsCount = importRows.filter((r) => !r.isValid).length;
+  const selectedBulkClass = classes.find((c) => c.id === bulkClassId);
+  const targetClassName = selectedBulkClass ? selectedBulkClass.name : 'Tanpa Kelas';
+
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 10;
 
   const filteredStudents = students.filter((s) => {
     const matchesSearch =
       s.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.nis.includes(searchTerm) ||
-      s.address.toLowerCase().includes(searchTerm.toLowerCase());
+      s.nis.includes(searchTerm);
     const matchesClass = selectedClassFilter === 'all' || s.classId === selectedClassFilter;
     return matchesSearch && matchesClass;
   });
@@ -459,10 +536,10 @@ export const SiswaPage: React.FC = () => {
             <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl text-xs space-y-1">
               <p className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
                 <FileSpreadsheet className="w-4 h-4 text-amber-600" />
-                <span>Format Data Teks / CSV / Excel (Dipisahkan Tab atau Koma)</span>
+                <span>Format Data Teks / CSV / Excel (Dipisahkan Tab, Koma, Titik Koma, atau Spasi)</span>
               </p>
               <p className="text-amber-700 dark:text-amber-300 text-[11px]">
-                Urutan Kolom: <strong>NIS, Nama Lengkap, Gender(L/P)</strong>
+                Urutan Kolom: <strong>NIS, Nama Lengkap, Gender (L/P)</strong>
               </p>
             </div>
 
@@ -505,7 +582,7 @@ export const SiswaPage: React.FC = () => {
                 rows={5}
                 value={rawText}
                 onChange={(e) => setRawText(e.target.value)}
-                placeholder={`2026101\tAditya Pratama\tL\tJakarta\t2012-05-14\tJl. Merdeka No 12\t081233445566\n2026102\tAnnisa Tri Hapsari\tP\tBandung\t2012-08-20\tJl. Melati No 45\t081277889900`}
+                placeholder={`2026101\tAditya Pratama\tL\n2026102\tAnnisa Tri Hapsari\tP\n2026103\tBudi Santoso\tL\n2026104\tCitra Maharani\tP`}
                 className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-[#696cff]"
               />
             </div>
@@ -513,42 +590,81 @@ export const SiswaPage: React.FC = () => {
             <button
               type="button"
               onClick={parseRawTextData}
-              className="w-full py-2.5 rounded-xl bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 text-white font-bold text-xs shadow-md flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-xl bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 text-white font-bold text-xs shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all"
             >
               <Upload className="w-4 h-4" /> Pratinjau & Saring Data
             </button>
 
-            {/* Parsed Preview Table */}
-            {parsedPreview.length > 0 && (
-              <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                    <span>Pratinjau Data ({parsedPreview.length} Siswa Siap Diimpor)</span>
-                  </h4>
+            {/* Parsed Preview Table & Statistics */}
+            {hasPreviewed && (
+              <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/80">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                      Total Data: <strong>{importRows.length}</strong> baris
+                    </span>
+                    <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      Valid: {validRowsCount}
+                    </span>
+                    {invalidRowsCount > 0 && (
+                      <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                        Tidak Valid: {invalidRowsCount}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500">
+                    Tujuan: <strong className="text-[#696cff]">Kelas {targetClassName}</strong>
+                  </span>
                 </div>
 
-                <div className="max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl">
+                <div className="max-h-56 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-2xl">
                   <table className="w-full text-left text-[11px]">
-                    <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold sticky top-0">
+                    <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold sticky top-0 border-b border-slate-200 dark:border-slate-700">
                       <tr>
-                        <th className="p-2">NIS</th>
-                        <th className="p-2">Nama</th>
-                        <th className="p-2">Gender</th>
-                        <th className="p-2">Kelas</th>
-                        <th className="p-2">No HP Ortu</th>
+                        <th className="p-2.5 text-center">No</th>
+                        <th className="p-2.5">NIS</th>
+                        <th className="p-2.5">Nama Lengkap</th>
+                        <th className="p-2.5">Gender (L/P)</th>
+                        <th className="p-2.5">Status & Validasi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {parsedPreview.map((item, idx) => (
-                        <tr key={idx}>
-                          <td className="p-2 font-bold text-[#696cff]">{item.nis}</td>
-                          <td className="p-2 font-semibold text-slate-800 dark:text-slate-200">{item.fullName}</td>
-                          <td className="p-2">{item.gender}</td>
-                          <td className="p-2">{item.className}</td>
-                          <td className="p-2">{item.parentPhone}</td>
+                      {importRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="p-4 text-center text-slate-400">
+                            Tidak ada data yang dapat diproses.
+                          </td>
                         </tr>
-                      ))}
+                      ) : (
+                        importRows.map((item) => (
+                          <tr key={item.rowNum} className={item.isValid ? 'hover:bg-slate-50 dark:hover:bg-slate-800/40' : 'bg-rose-50/40 dark:bg-rose-950/20'}>
+                            <td className="p-2.5 text-center font-bold text-slate-400">{item.rowNum}</td>
+                            <td className="p-2.5 font-bold text-[#696cff]">{item.nis || '-'}</td>
+                            <td className="p-2.5 font-semibold text-slate-800 dark:text-slate-200">{item.fullName || '-'}</td>
+                            <td className="p-2.5 font-bold">
+                              <span className={item.gender === 'L' ? 'text-sky-600' : 'text-pink-600'}>
+                                {item.gender}
+                              </span>
+                            </td>
+                            <td className="p-2.5">
+                              {item.isValid ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                  <CheckCircle2 className="w-3 h-3" /> Valid
+                                </span>
+                              ) : (
+                                <div className="space-y-0.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600 border border-rose-500/20">
+                                    <AlertCircle className="w-3 h-3" /> Tidak Valid
+                                  </span>
+                                  <p className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold">
+                                    {item.errors.join(', ')}
+                                  </p>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -559,21 +675,21 @@ export const SiswaPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsBulkModalOpen(false)}
-                className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs"
+                className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs cursor-pointer"
               >
                 Batal
               </button>
               <button
                 type="button"
-                disabled={parsedPreview.length === 0}
+                disabled={validRowsCount === 0}
                 onClick={handleConfirmBulkUpload}
-                className={`px-5 py-2.5 rounded-xl text-white font-bold text-xs shadow-md flex items-center gap-1.5 ${
-                  parsedPreview.length > 0
+                className={`px-5 py-2.5 rounded-xl text-white font-bold text-xs shadow-md flex items-center gap-1.5 transition-all cursor-pointer ${
+                  validRowsCount > 0
                     ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20'
-                    : 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed'
+                    : 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
                 }`}
               >
-                <CheckCircle2 className="w-4 h-4" /> Simpan {parsedPreview.length} Data Siswa
+                <CheckCircle2 className="w-4 h-4" /> Simpan {validRowsCount} Data Siswa
               </button>
             </div>
           </div>
