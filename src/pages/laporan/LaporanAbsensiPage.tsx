@@ -2,26 +2,120 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { PdfExcelService } from '../../services/pdfExcel';
-import { BarChart3, Download, FileSpreadsheet, Search } from 'lucide-react';
+import {
+  BarChart3,
+  Download,
+  FileSpreadsheet,
+  Search,
+  Calendar,
+  Filter,
+  School,
+  BookOpen,
+  User,
+  RotateCcw
+} from 'lucide-react';
 
 export const LaporanAbsensiPage: React.FC = () => {
   const { user } = useAuth();
-  const { classes, attendance, systemSettings, activePrincipal } = useData();
+  const { classes, subjects, teachers, attendance, systemSettings, activePrincipal, academicYears } = useData();
 
-  const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
+  const [selectedGradeLevelFilter, setSelectedGradeLevelFilter] = useState<string>('all');
+  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('all');
+  const [selectedTeacherFilter, setSelectedTeacherFilter] = useState<string>('all');
+  const [selectedAcademicYearFilter, setSelectedAcademicYearFilter] = useState<string>('all');
+  const [selectedSemesterFilter, setSelectedSemesterFilter] = useState<string>('all');
+  const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>('all');
+  const [selectedWeekFilter, setSelectedWeekFilter] = useState<string>('all');
+
+  const gradeLevels = Array.from(new Set(classes.map((c) => c.gradeLevel))).sort();
+
+  const monthsList = [
+    { value: '01', label: 'Januari' },
+    { value: '02', label: 'Februari' },
+    { value: '03', label: 'Maret' },
+    { value: '04', label: 'April' },
+    { value: '05', label: 'Mei' },
+    { value: '06', label: 'Juni' },
+    { value: '07', label: 'Juli' },
+    { value: '08', label: 'Agustus' },
+    { value: '09', label: 'September' },
+    { value: '10', label: 'Oktober' },
+    { value: '11', label: 'November' },
+    { value: '12', label: 'Desember' }
+  ];
+
+  const weeksList = [
+    { value: 'w1', label: 'Minggu ke-1 (Tgl 1-7)' },
+    { value: 'w2', label: 'Minggu ke-2 (Tgl 8-14)' },
+    { value: 'w3', label: 'Minggu ke-3 (Tgl 15-21)' },
+    { value: 'w4', label: 'Minggu ke-4 (Tgl 22-28)' },
+    { value: 'w5', label: 'Minggu ke-5 (Tgl 29-31)' }
+  ];
 
   const filteredAttendance = attendance.filter((a) => {
+    // 1. Search term
     const matchesSearch =
+      !searchTerm ||
       (a.studentName && a.studentName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (a.studentNis && a.studentNis.includes(searchTerm));
+
+    // 2. Class
     const matchesClass = selectedClassFilter === 'all' || a.classId === selectedClassFilter;
 
-    return matchesSearch && matchesClass;
+    // 3. Subject
+    const matchesSubject = selectedSubjectFilter === 'all' || a.subjectId === selectedSubjectFilter;
+
+    // 4. Teacher
+    const matchesTeacher = selectedTeacherFilter === 'all' || a.teacherId === selectedTeacherFilter;
+
+    // 5. Grade Level
+    const targetClass = classes.find((c) => c.id === a.classId);
+    const matchesGradeLevel =
+      selectedGradeLevelFilter === 'all' ||
+      (targetClass && targetClass.gradeLevel === selectedGradeLevelFilter);
+
+    // 6. Month & Week
+    const attDate = new Date(a.date);
+    const monthStr = (attDate.getMonth() + 1).toString().padStart(2, '0');
+    const matchesMonth = selectedMonthFilter === 'all' || monthStr === selectedMonthFilter;
+
+    const dayNum = attDate.getDate();
+    let weekKey = 'w1';
+    if (dayNum >= 1 && dayNum <= 7) weekKey = 'w1';
+    else if (dayNum >= 8 && dayNum <= 14) weekKey = 'w2';
+    else if (dayNum >= 15 && dayNum <= 21) weekKey = 'w3';
+    else if (dayNum >= 22 && dayNum <= 28) weekKey = 'w4';
+    else weekKey = 'w5';
+
+    const matchesWeek = selectedWeekFilter === 'all' || weekKey === selectedWeekFilter;
+
+    return (
+      matchesSearch &&
+      matchesClass &&
+      matchesSubject &&
+      matchesTeacher &&
+      matchesGradeLevel &&
+      matchesMonth &&
+      matchesWeek
+    );
   });
 
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setSelectedClassFilter('all');
+    setSelectedGradeLevelFilter('all');
+    setSelectedSubjectFilter('all');
+    setSelectedTeacherFilter('all');
+    setSelectedAcademicYearFilter('all');
+    setSelectedSemesterFilter('all');
+    setSelectedMonthFilter('all');
+    setSelectedWeekFilter('all');
+  };
+
   const handleExportPdf = async () => {
-    const subTitle = `Laporan Presensi Siswa | Total Records: ${filteredAttendance.length}`;
+    const subTitle = `Laporan Presensi Siswa | Filter Terpasang | Total Records: ${filteredAttendance.length}`;
     await PdfExcelService.exportAttendancePdf(filteredAttendance, systemSettings, subTitle, user, activePrincipal);
   };
 
@@ -37,62 +131,169 @@ export const LaporanAbsensiPage: React.FC = () => {
           <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <BarChart3 className="w-6 h-6 text-[#696cff]" /> Laporan Rekapitulasi Absensi Siswa
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">Ekspor rekapitulasi kehadiran siswa harian dan bulanan</p>
+          <p className="text-xs text-slate-400 mt-0.5">Filter presensi berdasarkan periode mingguan, bulanan, kelas, dan mata pelajaran</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleExportPdf}
-            className="px-3.5 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-bold text-xs hover:bg-rose-100 transition-colors flex items-center gap-1.5"
+            className="px-3.5 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-bold text-xs hover:bg-rose-100 transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <Download className="w-4 h-4" /> Cetak PDF (Kop & Margin)
           </button>
           <button
             onClick={handleExportExcel}
-            className="px-3.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-100 transition-colors flex items-center gap-1.5"
+            className="px-3.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-100 transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4" /> Export Excel
           </button>
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex items-center gap-3">
-          <Search className="w-5 h-5 text-slate-400" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Cari nama siswa atau NIS..."
-            className="w-full bg-transparent text-xs focus:outline-hidden text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
-          />
+      {/* Filter Control Box */}
+      <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+          <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+            <Filter className="w-4 h-4 text-[#696cff]" /> Filter Multi-Kriteria Absensi
+          </h3>
+          <button
+            onClick={handleResetFilters}
+            className="text-xs font-bold text-rose-500 hover:text-rose-600 flex items-center gap-1 cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Reset Filter
+          </button>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex items-center">
-          <select
-            value={selectedClassFilter}
-            onChange={(e) => setSelectedClassFilter(e.target.value)}
-            className="w-full bg-transparent px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
-          >
-            <option value="all">Semua Kelas</option>
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>
-                Kelas {c.name}
-              </option>
-            ))}
-          </select>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Pencarian */}
+          <div className="sm:col-span-2 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2.5">
+            <Search className="w-4 h-4 text-slate-400 shrink-0" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Cari nama siswa atau NIS..."
+              className="w-full bg-transparent text-xs font-medium focus:outline-hidden text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+            />
+          </div>
+
+          {/* Filter Bulanan */}
+          <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-[#696cff] shrink-0" />
+            <select
+              value={selectedMonthFilter}
+              onChange={(e) => setSelectedMonthFilter(e.target.value)}
+              className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+            >
+              <option value="all">Semua Bulan</option>
+              {monthsList.map((m) => (
+                <option key={m.value} value={m.value}>
+                  Bulan {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filter Mingguan */}
+          <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-emerald-500 shrink-0" />
+            <select
+              value={selectedWeekFilter}
+              onChange={(e) => setSelectedWeekFilter(e.target.value)}
+              className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+            >
+              <option value="all">Semua Minggu</option>
+              {weeksList.map((w) => (
+                <option key={w.value} value={w.value}>
+                  {w.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filter Tingkat */}
+          <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
+            <School className="w-4 h-4 text-indigo-500 shrink-0" />
+            <select
+              value={selectedGradeLevelFilter}
+              onChange={(e) => setSelectedGradeLevelFilter(e.target.value)}
+              className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+            >
+              <option value="all">Semua Tingkat</option>
+              {gradeLevels.map((gl) => (
+                <option key={gl} value={gl}>
+                  Tingkat {gl}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filter Kelas */}
+          <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
+            <School className="w-4 h-4 text-[#696cff] shrink-0" />
+            <select
+              value={selectedClassFilter}
+              onChange={(e) => setSelectedClassFilter(e.target.value)}
+              className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+            >
+              <option value="all">Semua Kelas</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  Kelas {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filter Mata Pelajaran */}
+          <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-amber-500 shrink-0" />
+            <select
+              value={selectedSubjectFilter}
+              onChange={(e) => setSelectedSubjectFilter(e.target.value)}
+              className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+            >
+              <option value="all">Semua Mapel</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filter Guru */}
+          <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
+            <User className="w-4 h-4 text-cyan-500 shrink-0" />
+            <select
+              value={selectedTeacherFilter}
+              onChange={(e) => setSelectedTeacherFilter(e.target.value)}
+              className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+            >
+              <option value="all">Semua Guru Pengajar</option>
+              {teachers.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.fullName}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table Section */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
+        <div className="p-4 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-bold text-slate-500">
+          <span>Menampilkan {filteredAttendance.length} data presensi</span>
+          <span>Single Source of Truth: Supabase Backend</span>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 uppercase font-bold border-b border-slate-100 dark:border-slate-800">
               <tr>
                 <th className="px-6 py-4">No</th>
-                <th className="px-6 py-4">Tanggal</th>
+                <th className="px-6 py-4">Tanggal & Periode</th>
                 <th className="px-6 py-4">NIS & Nama Siswa</th>
                 <th className="px-6 py-4 text-center">Status Kehadiran</th>
                 <th className="px-6 py-4">Keterangan</th>
@@ -102,7 +303,7 @@ export const LaporanAbsensiPage: React.FC = () => {
               {filteredAttendance.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-slate-400">
-                    Tidak ada catatan absensi ditemukan.
+                    Tidak ada catatan absensi ditemukan sesuai filter yang dipilih.
                   </td>
                 </tr>
               ) : (

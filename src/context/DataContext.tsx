@@ -19,7 +19,8 @@ import {
   INITIAL_SYSTEM_SETTINGS,
   INITIAL_PRINCIPALS,
   getSupabaseClient,
-  supabase
+  supabase,
+  resetSupabaseDatabaseTables
 } from '../services/supabase';
 import { showSuccessToast, showErrorToast } from '../components/common/SweetAlert';
 import { useAuth } from './AuthContext';
@@ -1490,20 +1491,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Reset local state to empty
-  const resetAllData = () => {
-    setTeachers([]);
-    setSubjects([]);
-    setClasses([]);
-    setStudents([]);
-    setGrades([]);
-    setAttendance([]);
-    setJournals([]);
-    setModules([]);
-    setActivityLogs([]);
+  // Reset local state & backend tables to clean initial state
+  const resetAllData = async () => {
+    try {
+      await resetSupabaseDatabaseTables();
+      setTeachers([]);
+      setSubjects([]);
+      setClasses([]);
+      setStudents([]);
+      setGrades([]);
+      setAttendance([]);
+      setJournals([]);
+      setModules([]);
+      setActivityLogs([]);
 
-    logActivity('RESET_DATA', 'Mereset seluruh data aplikasi ke kondisi awal (kosong)');
-    showSuccessToast('Seluruh data aplikasi di layar berhasil dibersihkan.');
+      logActivity('RESET_DATA', 'Mereset seluruh data aplikasi ke kondisi awal (kosong)');
+      showSuccessToast('Seluruh data aplikasi & backend database berhasil dibersihkan.');
+    } catch (err: any) {
+      console.error('Reset error:', err);
+      showErrorToast('Gagal mereset data backend Supabase: ' + (err.message || err));
+    }
   };
 
   // Role-Based Data Isolation Filtering (Backend/Provider Level Isolation)

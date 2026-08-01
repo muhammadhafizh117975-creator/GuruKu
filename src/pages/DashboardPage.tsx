@@ -49,6 +49,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActiveTab }) =>
   const {
     subjects,
     classes,
+    teachers,
+    academicYears,
     students,
     journals,
     modules,
@@ -67,32 +69,80 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActiveTab }) =>
   const totalJournals = journals.length;
   const totalModules = modules.length;
 
-  // Chart Data: Kehadiran Siswa Breakdown
-  const attendanceCounts = {
-    Hadir: attendance.filter((a) => a.status === 'Hadir').length,
-    Izin: attendance.filter((a) => a.status === 'Izin').length,
-    Sakit: attendance.filter((a) => a.status === 'Sakit').length,
-    Alfa: attendance.filter((a) => a.status === 'Alfa').length
-  };
+  // Filter States for Monthly Attendance Chart
+  const [dashClassFilter, setDashClassFilter] = React.useState<string>('all');
+  const [dashSubjectFilter, setDashSubjectFilter] = React.useState<string>('all');
+  const [dashTeacherFilter, setDashTeacherFilter] = React.useState<string>('all');
+  const [dashAcademicYearFilter, setDashAcademicYearFilter] = React.useState<string>('all');
+  const [dashSemesterFilter, setDashSemesterFilter] = React.useState<string>('all');
 
-  const attendanceChartData = {
-    labels: ['Hadir', 'Izin', 'Sakit', 'Alfa'],
+  // RBAC & Interactive Filtered Attendance
+  const filteredAttendance = attendance.filter((a) => {
+    // 1. RBAC Isolation
+    if (!isAdmin) {
+      const isTeacherRecord = a.teacherId === user?.id;
+      const isClassAssigned = classes.some((c) => c.id === a.classId);
+      const isSubjectAssigned = subjects.some((s) => s.id === a.subjectId);
+      if (!isTeacherRecord && !isClassAssigned && !isSubjectAssigned) return false;
+    }
+
+    // 2. Class Filter
+    if (dashClassFilter !== 'all' && a.classId !== dashClassFilter) return false;
+
+    // 3. Subject Filter
+    if (dashSubjectFilter !== 'all' && a.subjectId !== dashSubjectFilter) return false;
+
+    // 4. Teacher Filter (Admin only)
+    if (isAdmin && dashTeacherFilter !== 'all' && a.teacherId !== dashTeacherFilter) return false;
+
+    return true;
+  });
+
+  // Calculate Monthly Counts (Jan - Des) for Bar Chart
+  const monthsLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
+  const monthlyHadir = new Array(12).fill(0);
+  const monthlySakit = new Array(12).fill(0);
+  const monthlyIzin = new Array(12).fill(0);
+  const monthlyAlfa = new Array(12).fill(0);
+
+  filteredAttendance.forEach((a) => {
+    if (!a.date) return;
+    const dateObj = new Date(a.date);
+    const monthIndex = dateObj.getMonth();
+    if (monthIndex >= 0 && monthIndex < 12) {
+      if (a.status === 'Hadir') monthlyHadir[monthIndex]++;
+      else if (a.status === 'Sakit') monthlySakit[monthIndex]++;
+      else if (a.status === 'Izin') monthlyIzin[monthIndex]++;
+      else if (a.status === 'Alfa') monthlyAlfa[monthIndex]++;
+    }
+  });
+
+  const monthlyAttendanceChartData = {
+    labels: monthsLabels,
     datasets: [
       {
-        label: 'Jumlah Presensi Siswa',
-        data: [
-          attendanceCounts.Hadir,
-          attendanceCounts.Izin,
-          attendanceCounts.Sakit,
-          attendanceCounts.Alfa
-        ],
-        backgroundColor: [
-          '#28c76f', // Green
-          '#ff9f43', // Orange
-          '#00cfdd', // Cyan
-          '#ea5455'  // Red
-        ],
-        borderRadius: 8
+        label: 'Hadir',
+        data: monthlyHadir,
+        backgroundColor: '#28c76f',
+        borderRadius: 4
+      },
+      {
+        label: 'Sakit',
+        data: monthlySakit,
+        backgroundColor: '#00cfdd',
+        borderRadius: 4
+      },
+      {
+        label: 'Izin',
+        data: monthlyIzin,
+        backgroundColor: '#ff9f43',
+        borderRadius: 4
+      },
+      {
+        label: 'Alfa',
+        data: monthlyAlfa,
+        backgroundColor: '#ea5455',
+        borderRadius: 4
       }
     ]
   };
@@ -248,40 +298,102 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ setActiveTab }) =>
 
       {/* Analytics Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Chart 1: Kehadiran */}
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <div className="flex items-center justify-between mb-4">
+        {/* Chart 1: Kehadiran Siswa per Bulan */}
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <div>
               <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <CalendarCheck className="w-5 h-5 text-[#696cff]" /> Grafik Kehadiran Siswa
+                <CalendarCheck className="w-5 h-5 text-[#696cff]" /> Grafik Batang Kehadiran Siswa per Bulan
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">Rekapitulasi status presensi harian</p>
+              <p className="text-xs text-slate-400 mt-0.5">Statistik presensi bulanan (Hadir, Sakit, Izin, Alfa)</p>
             </div>
             <button 
               onClick={() => setActiveTab('laporan-absensi')}
-              className="text-xs font-bold text-[#696cff] hover:underline"
+              className="text-xs font-bold text-[#696cff] hover:underline cursor-pointer"
             >
-              Lihat Detail
+              Lihat Detail Laporan
             </button>
           </div>
+
+          {/* Filters Bar for Monthly Chart */}
+          <div className="flex flex-wrap items-center gap-2 p-2 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
+            {/* Filter Kelas */}
+            <select
+              value={dashClassFilter}
+              onChange={(e) => setDashClassFilter(e.target.value)}
+              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+            >
+              <option value="all">Semua Kelas</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  Kelas {c.name}
+                </option>
+              ))}
+            </select>
+
+            {/* Filter Mapel */}
+            <select
+              value={dashSubjectFilter}
+              onChange={(e) => setDashSubjectFilter(e.target.value)}
+              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+            >
+              <option value="all">Semua Mapel</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+
+            {/* Filter Guru (Khusus Admin) */}
+            {isAdmin && (
+              <select
+                value={dashTeacherFilter}
+                onChange={(e) => setDashTeacherFilter(e.target.value)}
+                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+              >
+                <option value="all">Semua Guru</option>
+                {teachers.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.fullName}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
           <div className="h-64 flex items-center justify-center">
-            {attendance.length === 0 ? (
+            {filteredAttendance.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-center p-4">
                 <CalendarCheck className="w-10 h-10 text-slate-300 dark:text-slate-600 mb-2 stroke-[1.5]" />
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Belum ada data presensi harian</p>
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Belum ada data presensi harian untuk filter ini</p>
                 <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Grafik akan terisi secara otomatis setelah data presensi diinput.</p>
               </div>
             ) : (
               <Bar
-                data={attendanceChartData}
+                data={monthlyAttendanceChartData}
                 options={{
                   responsive: true,
                   maintainAspectRatio: false,
                   plugins: {
-                    legend: { display: false }
+                    legend: {
+                      display: true,
+                      position: 'top',
+                      labels: {
+                        boxWidth: 10,
+                        usePointStyle: true,
+                        font: { size: 10, weight: 'bold' }
+                      }
+                    }
                   },
                   scales: {
-                    y: { beginAtZero: true }
+                    x: {
+                      grid: { display: false }
+                    },
+                    y: {
+                      beginAtZero: true,
+                      ticks: { stepSize: 1 }
+                    }
                   }
                 }}
               />
