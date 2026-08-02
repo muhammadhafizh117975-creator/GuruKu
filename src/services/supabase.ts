@@ -571,12 +571,19 @@ CREATE TRIGGER set_school_principals_updated_at
 CREATE TABLE IF NOT EXISTS public.notifications (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id TEXT,
+  role TEXT DEFAULT 'all',
   title TEXT NOT NULL,
   message TEXT NOT NULL,
   type TEXT DEFAULT 'info',
+  icon TEXT,
   is_read BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'all';
+ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS icon TEXT;
+ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- 14. TABEL ACTIVITY_LOGS (CATATAN AKTIVITAS SISTEM)
 CREATE TABLE IF NOT EXISTS public.activity_logs (
@@ -600,6 +607,8 @@ CREATE INDEX IF NOT EXISTS idx_journals_date ON public.teaching_journals(date);
 CREATE INDEX IF NOT EXISTS idx_modules_subject_id ON public.teaching_modules(subject_id);
 CREATE INDEX IF NOT EXISTS idx_principals_is_active ON public.school_principals(is_active);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON public.notifications(is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON public.notifications(created_at);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_timestamp ON public.activity_logs(timestamp);
 
 -- 16. ROW LEVEL SECURITY (RLS) POLICIES PERMISSION (RBAC)

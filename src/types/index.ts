@@ -233,11 +233,14 @@ export interface ActivityLog {
 
 export interface NotificationItem {
   id: string;
-  userId?: string;
+  userId?: string | null;
+  role?: 'admin' | 'guru' | 'all' | null;
   title: string;
   message: string;
   type?: 'info' | 'success' | 'warning' | 'error';
+  icon?: string;
   isRead: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 

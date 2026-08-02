@@ -138,11 +138,16 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="relative">
           <button
             onClick={() => {
-              setNotifDropdownOpen(!notifDropdownOpen);
+              const nextOpen = !notifDropdownOpen;
+              setNotifDropdownOpen(nextOpen);
               setUserDropdownOpen(false);
+              if (nextOpen && unreadCount > 0) {
+                // Automatically mark as read and sync to database
+                markAllNotificationsAsRead();
+              }
             }}
             className="relative p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-[#696cff] transition-colors"
-            title="Notifikasi Administrator"
+            title="Notifikasi System Realtime"
           >
             <Bell className="w-4 h-4" />
             {unreadCount > 0 && (

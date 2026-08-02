@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { PdfExcelService } from '../../services/pdfExcel';
+import { PrintableReportModal, ReportMeta } from '../../components/common/PrintableReportModal';
 import {
   BarChart3,
   Download,
@@ -12,7 +13,8 @@ import {
   School,
   BookOpen,
   User,
-  RotateCcw
+  RotateCcw,
+  Printer
 } from 'lucide-react';
 
 export const LaporanAbsensiPage: React.FC = () => {
@@ -28,8 +30,12 @@ export const LaporanAbsensiPage: React.FC = () => {
   const [selectedSemesterFilter, setSelectedSemesterFilter] = useState<string>('all');
   const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>('all');
   const [selectedWeekFilter, setSelectedWeekFilter] = useState<string>('all');
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
 
   const gradeLevels = Array.from(new Set(classes.map((c) => c.gradeLevel))).sort();
+
+  const selectedSubjObj = subjects.find((s) => s.id === selectedSubjectFilter);
+  const selectedClassObj = classes.find((c) => c.id === selectedClassFilter);
 
   const monthsList = [
     { value: '01', label: 'Januari' },
@@ -114,14 +120,37 @@ export const LaporanAbsensiPage: React.FC = () => {
     setSelectedWeekFilter('all');
   };
 
+  const activeAcademicYear = systemSettings.academicYear || '2025/2026';
+  const activeSemester = systemSettings.semester || 'Ganjil';
+
+  const metaInfo: ReportMeta = {
+    title: 'LAPORAN REKAPITULASI PRESENSI SISWA',
+    academicYear: activeAcademicYear,
+    semester: activeSemester,
+    subjectName: selectedSubjObj ? selectedSubjObj.name : 'Semua Mata Pelajaran',
+    gradeLevel: selectedGradeLevelFilter !== 'all' ? `Tingkat ${selectedGradeLevelFilter}` : 'Semua Tingkat',
+    className: selectedClassObj ? `Kelas ${selectedClassObj.name}` : 'Semua Kelas',
+    teacherName: user?.fullName || 'Guru Pengajar'
+  };
+
   const handleExportPdf = async () => {
-    const subTitle = `Laporan Presensi Siswa | Filter Terpasang | Total Records: ${filteredAttendance.length}`;
-    await PdfExcelService.exportAttendancePdf(filteredAttendance, systemSettings, subTitle, user, activePrincipal);
+    const subTitle = `Laporan Presensi Siswa | Total Records: ${filteredAttendance.length}`;
+    await PdfExcelService.exportAttendancePdf(filteredAttendance, systemSettings, subTitle, user, activePrincipal, metaInfo);
   };
 
   const handleExportExcel = () => {
     PdfExcelService.exportAttendanceExcel(filteredAttendance);
   };
+
+  const tableHeaders = ['No', 'Tanggal', 'NIS', 'Nama Siswa', 'Status Kehadiran', 'Keterangan'];
+  const tableData = filteredAttendance.map((att, idx) => [
+    idx + 1,
+    att.date,
+    att.studentNis || '-',
+    att.studentName || '-',
+    att.status,
+    att.notes || '-'
+  ]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -131,15 +160,21 @@ export const LaporanAbsensiPage: React.FC = () => {
           <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <BarChart3 className="w-6 h-6 text-[#696cff]" /> Laporan Rekapitulasi Absensi Siswa
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">Filter presensi berdasarkan periode mingguan, bulanan, kelas, dan mata pelajaran</p>
+          <p className="text-xs text-slate-400 mt-0.5">Standar format laporan resmi A4 Portrait dengan kop surat dan margin presisi</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <button
+            onClick={() => setIsPrintModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-[#696cff] text-white font-bold text-xs hover:bg-[#5f61e6] shadow-md shadow-[#696cff]/20 transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <Printer className="w-4 h-4" /> Cetak Dokumen A4
+          </button>
+          <button
             onClick={handleExportPdf}
             className="px-3.5 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-bold text-xs hover:bg-rose-100 transition-colors flex items-center gap-1.5 cursor-pointer"
           >
-            <Download className="w-4 h-4" /> Cetak PDF (Kop & Margin)
+            <Download className="w-4 h-4" /> Unduh PDF
           </button>
           <button
             onClick={handleExportExcel}
@@ -336,6 +371,20 @@ export const LaporanAbsensiPage: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Printable A4 Modal */}
+      <PrintableReportModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        settings={systemSettings}
+        meta={metaInfo}
+        activePrincipal={activePrincipal}
+        currentUser={user}
+        tableHeaders={tableHeaders}
+        tableData={tableData}
+        summaryBadge={`${filteredAttendance.length} Records Presensi`}
+        onExportPdf={handleExportPdf}
+      />
     </div>
   );
 };

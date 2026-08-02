@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { Modal } from '../../components/common/Modal';
-import { showSuccessToast, showConfirmModal } from '../../components/common/SweetAlert';
+import { showSuccessToast, showErrorToast, showConfirmModal } from '../../components/common/SweetAlert';
 import { Profile } from '../../types';
+import * as XLSX from 'xlsx';
 import {
   Users,
   Plus,
@@ -20,15 +21,44 @@ import {
   Copy,
   CheckCircle2,
   Edit2,
-  Trash2
+  Trash2,
+  FileSpreadsheet,
+  Upload,
+  AlertCircle,
+  CheckCircle,
+  HelpCircle,
+  Check
 } from 'lucide-react';
+
+interface ParsedTeacherRow {
+  id: string;
+  nipNuptk: string;
+  fullName: string;
+  email: string;
+  username: string;
+  phone: string;
+  subjectName: string;
+  className: string;
+  role: string;
+  isValid: boolean;
+  errors: string[];
+  matchedSubjectId?: string;
+  matchedClassId?: string;
+}
 
 export const GuruPage: React.FC = () => {
   const { user, registerGuru, adminResetPasswordGuru } = useAuth();
-  const { teachers, addTeacher, updateTeacher, deleteTeacher, subjects, classes, assignTeacherToSubjectsAndClasses } = useData();
+  const { teachers, addTeacher, updateTeacher, deleteTeacher, subjects, classes, assignTeacherToSubjectsAndClasses, loadDataFromSupabase } = useData();
 
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+
+  // Import Excel State
+  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
+  const [parsedRows, setParsedRows] = useState<ParsedTeacherRow[]>([]);
+  const [importFilter, setImportFilter] = useState<'all' | 'valid' | 'invalid'>('all');
+  const [isProcessingImport, setIsProcessingImport] = useState<boolean>(false);
+  const [fileName, setFileName] = useState<string>('');
 
   // New Guru Form State
   const [fullName, setFullName] = useState<string>('');
@@ -199,6 +229,246 @@ Password: ${createdGuruInfo.password}`;
     setNewPassword(res);
   };
 
+  // Template Download Handler
+  const handleDownloadTemplate = () => {
+    const templateData = [
+      {
+        'NUPTK/NIP': '198501012010011001',
+        'Nama Lengkap': 'Ahmad Subagja, M.Pd.',
+        'Email': 'ahmad.subagja@smp.sch.id',
+        'Username': 'ahmad_subagja',
+        'Nomor HP': '081234567890',
+        'Mata Pelajaran': subjects.length > 0 ? subjects[0].name : 'Matematika',
+        'Kelas Wali': classes.length > 0 ? classes[0].name : '7A',
+        'Role': 'Guru'
+      },
+      {
+        'NUPTK/NIP': '199002022015022002',
+        'Nama Lengkap': 'Siti Nurhaliza, S.Pd.',
+        'Email': 'siti.nurhaliza@smp.sch.id',
+        'Username': 'siti_nurhaliza',
+        'Nomor HP': '081987654321',
+        'Mata Pelajaran': subjects.length > 1 ? subjects[1].name : 'Bahasa Indonesia',
+        'Kelas Wali': classes.length > 1 ? classes[1].name : '8B',
+        'Role': 'Guru'
+      }
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+    worksheet['!cols'] = [
+      { wch: 22 },
+      { wch: 28 },
+      { wch: 28 },
+      { wch: 18 },
+      { wch: 16 },
+      { wch: 24 },
+      { wch: 14 },
+      { wch: 10 }
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Template Import Guru');
+    XLSX.writeFile(workbook, `Template_Import_Guru_${Date.now()}.xlsx`);
+    showSuccessToast('Template Excel Import Guru berhasil diunduh!');
+  };
+
+  // Excel File Parsing Handler
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setFileName(file.name);
+    const reader = new FileReader();
+
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const rawData = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: '' });
+
+        if (!rawData || rawData.length === 0) {
+          showErrorToast('File Excel kosong atau tidak memiliki data yang valid.');
+          return;
+        }
+
+        const existingEmails = new Set(teachers.map((t) => t.email.toLowerCase().trim()));
+        const fileEmails = new Set<string>();
+
+        const parsed: ParsedTeacherRow[] = rawData.map((row, idx) => {
+          const rowErrors: string[] = [];
+
+          // Column Mapping Flexible Detection
+          const nipNuptk = String(
+            row['NUPTK/NIP'] || row['NIP'] || row['NUPTK'] || row['nip'] || row['nuptk'] || ''
+          ).trim();
+
+          const fullNameVal = String(
+            row['Nama Lengkap'] || row['Nama'] || row['nama_lengkap'] || row['nama'] || ''
+          ).trim();
+
+          const emailVal = String(
+            row['Email'] || row['email'] || row['Alamat Email'] || ''
+          ).trim().toLowerCase();
+
+          let usernameVal = String(
+            row['Username'] || row['username'] || ''
+          ).trim().toLowerCase();
+
+          const phoneVal = String(
+            row['Nomor HP'] || row['No HP'] || row['HP'] || row['Phone'] || row['phone'] || ''
+          ).trim();
+
+          const subjectNameVal = String(
+            row['Mata Pelajaran'] || row['Mapel'] || row['subject'] || ''
+          ).trim();
+
+          const classNameVal = String(
+            row['Kelas Wali'] || row['Kelas'] || row['kelas'] || ''
+          ).trim();
+
+          const roleVal = String(row['Role'] || row['role'] || 'Guru').trim();
+
+          // Validation Checks
+          if (!fullNameVal) {
+            rowErrors.push('Nama Lengkap wajib diisi');
+          } else if (fullNameVal.length < 3) {
+            rowErrors.push('Nama Lengkap minimal 3 karakter');
+          }
+
+          if (!emailVal) {
+            rowErrors.push('Email wajib diisi');
+          } else {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(emailVal)) {
+              rowErrors.push('Format Email tidak valid');
+            } else if (existingEmails.has(emailVal)) {
+              rowErrors.push('Email sudah terdaftar di database');
+            } else if (fileEmails.has(emailVal)) {
+              rowErrors.push('Email duplikat di dalam file Excel');
+            } else {
+              fileEmails.add(emailVal);
+            }
+          }
+
+          // Auto username if blank
+          if (!usernameVal && emailVal.includes('@')) {
+            usernameVal = emailVal.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_');
+          }
+
+          // Match Subject
+          let matchedSubjId: string | undefined = undefined;
+          if (subjectNameVal) {
+            const foundSubj = subjects.find(
+              (s) =>
+                s.name.toLowerCase().trim() === subjectNameVal.toLowerCase() ||
+                s.code.toLowerCase().trim() === subjectNameVal.toLowerCase()
+            );
+            if (foundSubj) {
+              matchedSubjId = foundSubj.id;
+            } else {
+              rowErrors.push(`Mapel '${subjectNameVal}' tidak ditemukan di Data Master`);
+            }
+          }
+
+          // Match Class
+          let matchedClsId: string | undefined = undefined;
+          if (classNameVal) {
+            const cleanCls = classNameVal.replace(/^kelas\s+/i, '').trim();
+            const foundCls = classes.find((c) => c.name.toLowerCase().trim() === cleanCls.toLowerCase());
+            if (foundCls) {
+              matchedClsId = foundCls.id;
+            } else {
+              rowErrors.push(`Kelas '${classNameVal}' tidak ditemukan di Data Master`);
+            }
+          }
+
+          return {
+            id: `row_${idx}_${Date.now()}`,
+            nipNuptk,
+            fullName: fullNameVal,
+            email: emailVal,
+            username: usernameVal || `guru_${idx + 1}`,
+            phone: phoneVal,
+            subjectName: subjectNameVal,
+            className: classNameVal,
+            role: roleVal || 'Guru',
+            isValid: rowErrors.length === 0,
+            errors: rowErrors,
+            matchedSubjectId: matchedSubjId,
+            matchedClassId: matchedClsId
+          };
+        });
+
+        setParsedRows(parsed);
+        setIsImportModalOpen(true);
+      } catch (err: any) {
+        console.error('Error parsing Excel:', err);
+        showErrorToast(`Gagal membaca file Excel: ${err.message || err}`);
+      }
+    };
+
+    reader.readAsBinaryString(file);
+    e.target.value = '';
+  };
+
+  // Execute Bulk Import
+  const handleProcessImport = async () => {
+    const validRows = parsedRows.filter((r) => r.isValid);
+    if (validRows.length === 0) {
+      showErrorToast('Tidak ada data valid yang dapat diimpor.');
+      return;
+    }
+
+    setIsProcessingImport(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const row of validRows) {
+      try {
+        const res = await registerGuru(row.fullName, row.email, row.username, row.nipNuptk, row.phone);
+        if (res.success && res.profile) {
+          addTeacher(res.profile);
+
+          // Assign subject and class if matched
+          const subjIds = row.matchedSubjectId ? [row.matchedSubjectId] : [];
+          const classIds = row.matchedClassId ? [row.matchedClassId] : [];
+          if (subjIds.length > 0 || classIds.length > 0) {
+            await assignTeacherToSubjectsAndClasses(res.profile.id, subjIds, classIds);
+          }
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch (err) {
+        console.error('Failed import row:', row, err);
+        failCount++;
+      }
+    }
+
+    await loadDataFromSupabase();
+    setIsProcessingImport(false);
+    setIsImportModalOpen(false);
+    setParsedRows([]);
+    setFileName('');
+
+    if (successCount > 0) {
+      showSuccessToast(`Berhasil mengimpor ${successCount} data Guru ke sistem! ${failCount > 0 ? `(${failCount} gagal)` : ''}`);
+    } else {
+      showErrorToast('Gagal mengimpor data guru.');
+    }
+  };
+
+  const validRowsCount = parsedRows.filter((r) => r.isValid).length;
+  const invalidRowsCount = parsedRows.filter((r) => !r.isValid).length;
+
+  const filteredImportRows = parsedRows.filter((r) => {
+    if (importFilter === 'valid') return r.isValid;
+    if (importFilter === 'invalid') return !r.isValid;
+    return true;
+  });
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header Bar */}
@@ -207,15 +477,35 @@ Password: ${createdGuruInfo.password}`;
           <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <Users className="w-6 h-6 text-[#696cff]" /> Kelola Data Guru & Tenaga Pendidik
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">Tambah akun guru baru, atur username login, dan reset password terpusat</p>
+          <p className="text-xs text-slate-400 mt-0.5">Tambah akun guru baru, import data massal via Excel, atur username, dan reset password terpusat</p>
         </div>
 
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="px-4 py-2.5 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 transition-all flex items-center gap-2 shrink-0"
-        >
-          <Plus className="w-4 h-4" /> Tambah Guru Baru
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleDownloadTemplate}
+            className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Unduh Template Excel
+          </button>
+
+          <label className="px-3.5 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 text-emerald-600 dark:text-emerald-400 font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer">
+            <Upload className="w-4 h-4" /> Import Excel
+            <input
+              type="file"
+              accept=".xlsx, .xls"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+          </label>
+
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white font-bold text-xs shadow-md shadow-[#696cff]/20 transition-all flex items-center gap-2 shrink-0 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> Tambah Guru Baru
+          </button>
+        </div>
       </div>
 
       {/* Notice Banner */}
@@ -868,6 +1158,170 @@ Password: ${createdGuruInfo.password}`;
             </div>
           </form>
         )}
+      </Modal>
+
+      {/* Modal Import Guru via Excel */}
+      <Modal
+        isOpen={isImportModalOpen}
+        onClose={() => {
+          if (!isProcessingImport) {
+            setIsImportModalOpen(false);
+            setParsedRows([]);
+            setFileName('');
+          }
+        }}
+        title="Import Data Guru via File Excel"
+        subtitle={`Pratinjau Hasil Pembacaan File: ${fileName}`}
+      >
+        <div className="space-y-4">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Total Baris</p>
+              <p className="text-xl font-black text-slate-800 dark:text-slate-100">{parsedRows.length}</p>
+            </div>
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-800 text-center">
+              <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">Data Valid</p>
+              <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">{validRowsCount}</p>
+            </div>
+            <div className="p-3 bg-rose-50 dark:bg-rose-950/40 rounded-2xl border border-rose-200 dark:border-rose-800 text-center">
+              <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase">Tidak Valid</p>
+              <p className="text-xl font-black text-rose-600 dark:text-rose-400">{invalidRowsCount}</p>
+            </div>
+          </div>
+
+          {/* Filter Tabs */}
+          <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+            <button
+              type="button"
+              onClick={() => setImportFilter('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                importFilter === 'all'
+                  ? 'bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+              }`}
+            >
+              Semua ({parsedRows.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setImportFilter('valid')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                importFilter === 'valid'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
+              }`}
+            >
+              Valid ({validRowsCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setImportFilter('invalid')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                importFilter === 'invalid'
+                  ? 'bg-rose-600 text-white'
+                  : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400'
+              }`}
+            >
+              Error / Tidak Valid ({invalidRowsCount})
+            </button>
+          </div>
+
+          {/* Table Preview */}
+          <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 font-bold sticky top-0">
+                <tr>
+                  <th className="p-3">No</th>
+                  <th className="p-3">Nama & NIP</th>
+                  <th className="p-3">Email & Username</th>
+                  <th className="p-3">Mapel / Kelas</th>
+                  <th className="p-3 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {filteredImportRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-4 text-center text-slate-400">
+                      Tidak ada data yang sesuai filter.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredImportRows.map((row, idx) => (
+                    <tr key={row.id} className={row.isValid ? 'hover:bg-slate-50/50 dark:hover:bg-slate-800/50' : 'bg-rose-50/30 dark:bg-rose-950/20'}>
+                      <td className="p-3 font-bold text-slate-400">{idx + 1}</td>
+                      <td className="p-3">
+                        <p className="font-bold text-slate-800 dark:text-slate-100">{row.fullName || '-'}</p>
+                        <p className="text-[10px] text-slate-400">NIP: {row.nipNuptk || '-'}</p>
+                      </td>
+                      <td className="p-3">
+                        <p className="font-semibold text-slate-700 dark:text-slate-200">{row.email || '-'}</p>
+                        <p className="text-[10px] text-[#696cff] font-bold">@{row.username}</p>
+                      </td>
+                      <td className="p-3">
+                        <p className="font-medium text-slate-700 dark:text-slate-200">{row.subjectName || '-'}</p>
+                        <p className="text-[10px] text-emerald-600 font-bold">{row.className ? `Kelas ${row.className}` : '-'}</p>
+                      </td>
+                      <td className="p-3 text-center">
+                        {row.isValid ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600">
+                            <CheckCircle className="w-3 h-3" /> Valid
+                          </span>
+                        ) : (
+                          <div className="space-y-1">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600">
+                              <AlertCircle className="w-3 h-3" /> Error
+                            </span>
+                            <div className="text-[9px] text-rose-600 dark:text-rose-400 max-w-[140px] truncate">
+                              {row.errors.join(', ')}
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Bottom Controls */}
+          <div className="pt-3 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
+            <p className="text-xs text-slate-400">
+              * Hanya data berstatus <strong>Valid</strong> yang akan diproses pembuatan akunnya.
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsImportModalOpen(false);
+                  setParsedRows([]);
+                  setFileName('');
+                }}
+                disabled={isProcessingImport}
+                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-200 cursor-pointer disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleProcessImport}
+                disabled={validRowsCount === 0 || isProcessingImport}
+                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isProcessingImport ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" /> Memproses Import...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4" /> Proses Import ({validRowsCount} Guru Valid)
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       </Modal>
     </div>
   );

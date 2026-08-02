@@ -133,69 +133,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ]);
   const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(false);
 
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  // Filter notifications for current user role & ID
+  const visibleNotifications = notifications.filter((n) => {
+    if (n.userId && user?.id && n.userId !== user.id) return false;
+    if (n.role && user?.role && n.role !== 'all' && n.role !== user.role) return false;
+    return true;
+  });
 
-  const markNotificationAsRead = useCallback(async (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
-    );
-    const client = getSupabaseClient();
-    if (client) {
-      try {
-        await client.from('notifications').update({ is_read: true }).eq('id', id);
-      } catch (e) {
-        console.warn('Failed updating notification in Supabase:', e);
-      }
-    }
-  }, []);
-
-  const markAllNotificationsAsRead = useCallback(async () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    const client = getSupabaseClient();
-    if (client) {
-      try {
-        await client.from('notifications').update({ is_read: true }).eq('is_read', false);
-      } catch (e) {
-        console.warn('Failed marking all notifications read in Supabase:', e);
-      }
-    }
-  }, []);
-
-  const addNotification = useCallback(
-    async (notif: { title: string; message: string; type?: 'info' | 'success' | 'warning' | 'error'; userId?: string }) => {
-      const newNotif: NotificationItem = {
-        id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        userId: notif.userId,
-        title: notif.title,
-        message: notif.message,
-        type: notif.type || 'info',
-        isRead: false,
-        createdAt: new Date().toISOString()
-      };
-
-      setNotifications((prev) => [newNotif, ...prev]);
-
-      const client = getSupabaseClient();
-      if (client) {
-        try {
-          await client.from('notifications').insert([
-            {
-              id: newNotif.id,
-              user_id: newNotif.userId || null,
-              title: newNotif.title,
-              message: newNotif.message,
-              type: newNotif.type,
-              is_read: false,
-              created_at: newNotif.createdAt
-            }
-          ]);
-        } catch (e) {
-          console.warn('Failed inserting notification in Supabase:', e);
-        }
-      }
-    },
-    []
-  );
+  const unreadCount = visibleNotifications.filter((n) => !n.isRead).length;
 
   const activeAcademicYear = academicYears.find((ay) => ay.isActive) || academicYears[0] || {
     id: 'ay_default',
@@ -503,18 +448,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data: notifData, error: notifErr } = await client
         .from('notifications')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (!notifErr && notifData && notifData.length > 0) {
         setNotifications(
           notifData.map((n: any) => ({
             id: n.id,
             userId: n.user_id || undefined,
+            role: n.role || 'all',
             title: n.title,
             message: n.message,
             type: n.type || 'info',
+            icon: n.icon || undefined,
             isRead: Boolean(n.is_read),
-            createdAt: n.created_at || new Date().toISOString()
+            createdAt: n.created_at || new Date().toISOString(),
+            updatedAt: n.updated_at
           }))
         );
       }
@@ -522,6 +471,92 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('[Supabase DB Sync Critical Error] Failed to load database state:', err);
     }
   }, []);
+
+  const markNotificationAsRead = useCallback(async (id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, isRead: true, updatedAt: new Date().toISOString() } : n))
+    );
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        await client
+          .from('notifications')
+          .update({ is_read: true, updated_at: new Date().toISOString() })
+          .eq('id', id);
+      } catch (e) {
+        console.warn('Failed updating notification in Supabase:', e);
+      }
+    }
+  }, []);
+
+  const markAllNotificationsAsRead = useCallback(async () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true, updatedAt: new Date().toISOString() })));
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        await client
+          .from('notifications')
+          .update({ is_read: true, updated_at: new Date().toISOString() })
+          .eq('is_read', false);
+      } catch (e) {
+        console.warn('Failed marking all notifications read in Supabase:', e);
+      }
+    }
+    // After 2.5s auto re-sync to ensure Realtime propagation & zero-count state persistence
+    setTimeout(() => {
+      loadDataFromSupabase();
+    }, 2500);
+  }, [loadDataFromSupabase]);
+
+  const addNotification = useCallback(
+    async (notif: {
+      title: string;
+      message: string;
+      type?: 'info' | 'success' | 'warning' | 'error';
+      role?: 'admin' | 'guru' | 'all' | null;
+      userId?: string | null;
+      icon?: string;
+    }) => {
+      const now = new Date().toISOString();
+      const newNotif: NotificationItem = {
+        id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        userId: notif.userId || null,
+        role: notif.role || 'all',
+        title: notif.title,
+        message: notif.message,
+        type: notif.type || 'info',
+        icon: notif.icon,
+        isRead: false,
+        createdAt: now,
+        updatedAt: now
+      };
+
+      setNotifications((prev) => [newNotif, ...prev]);
+
+      const client = getSupabaseClient();
+      if (client) {
+        try {
+          await client.from('notifications').insert([
+            {
+              id: newNotif.id,
+              user_id: newNotif.userId || null,
+              role: newNotif.role || 'all',
+              title: newNotif.title,
+              message: newNotif.message,
+              type: newNotif.type,
+              icon: newNotif.icon || null,
+              is_read: false,
+              created_at: newNotif.createdAt,
+              updated_at: newNotif.updatedAt
+            }
+          ]);
+        } catch (e) {
+          console.warn('Failed inserting notification in Supabase:', e);
+        }
+      }
+    },
+    []
+  );
 
   // Initialization: Initial Fetch, Realtime Subscriptions, and Tab Focus Auto-Fetch
   useEffect(() => {
@@ -640,6 +675,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (success) {
       const selected = academicYears.find((ay) => ay.id === id);
       logActivity('AKTIFKAN_TAHUN_AJARAN', `Mengaktifkan tahun pelajaran ${selected?.year || id}`);
+      addNotification({
+        title: 'Tahun Ajaran & Semester Aktif Diubah',
+        message: `Administrator mengubah Tahun Ajaran Aktif menjadi ${selected?.year} Semester ${selected?.semester}.`,
+        type: 'warning',
+        role: 'all'
+      });
       showSuccessToast(`Tahun Pelajaran ${selected?.year} Semester ${selected?.semester} diaktifkan.`);
     }
   };
@@ -682,6 +723,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       await loadDataFromSupabase();
       logActivity('TAMBAH_GURU', `Menambahkan akun guru ${teacher.fullName}`);
+      addNotification({
+        title: 'Guru Baru Ditambahkan',
+        message: `Administrator menambahkan akun Guru baru: ${teacher.fullName} (${teacher.nipNuptk || 'NIP/NUPTK'}).`,
+        type: 'info',
+        role: 'all'
+      });
       showSuccessToast('Data guru berhasil ditambahkan.');
     } catch (err: any) {
       console.error('[Supabase DB Exception] addTeacher failed:', err);
@@ -767,6 +814,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       await loadDataFromSupabase();
       logActivity('TAMBAH_MATA_PELAJARAN', `Menambahkan mata pelajaran ${subj.name}`);
+      addNotification({
+        title: 'Mata Pelajaran Baru',
+        message: `Administrator menambahkan mata pelajaran baru: ${subj.name} (Kode: ${subj.code}).`,
+        type: 'info',
+        role: 'all'
+      });
       showSuccessToast('Mata Pelajaran berhasil ditambahkan.');
     } catch (err: any) {
       console.error('[Supabase DB Exception] addSubject failed:', err);
@@ -851,6 +904,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       await loadDataFromSupabase();
       logActivity('TAMBAH_KELAS', `Menambahkan kelas ${cls.name}`);
+      addNotification({
+        title: 'Kelas Baru Dibuat',
+        message: `Administrator membuat kelas baru: ${cls.name} (${cls.gradeLevel}).`,
+        type: 'info',
+        role: 'all'
+      });
       showSuccessToast('Kelas berhasil ditambahkan.');
     } catch (err: any) {
       console.error('[Supabase DB Exception] addClass failed:', err);
@@ -935,6 +994,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       await loadDataFromSupabase();
       logActivity('TAMBAH_SISWA', `Menambahkan siswa ${std.fullName}`);
+      addNotification({
+        title: 'Data Siswa Ditambahkan',
+        message: `Administrator menambahkan data siswa baru: ${std.fullName}.`,
+        type: 'info',
+        role: 'all'
+      });
       showSuccessToast('Siswa berhasil ditambahkan.');
     } catch (err: any) {
       console.error('[Supabase DB Exception] addStudent failed:', err);
@@ -974,6 +1039,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       await loadDataFromSupabase();
       logActivity('BULK_UPLOAD_SISWA', `Berhasil mengunggah ${stdsList.length} data siswa baru`);
+      addNotification({
+        title: 'Impor Data Siswa Berhasil',
+        message: `Administrator berhasil mengimpor ${stdsList.length} data siswa baru ke sistem.`,
+        type: 'success',
+        role: 'all'
+      });
       showSuccessToast(`Berhasil mengimpor ${stdsList.length} data siswa baru.`);
     } catch (err: any) {
       console.error('[Supabase DB Exception] bulkAddStudents failed:', err);
@@ -1006,6 +1077,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       await loadDataFromSupabase();
       logActivity('UBAH_SISWA', `Memperbarui data siswa`);
+      addNotification({
+        title: 'Data Siswa Diperbarui',
+        message: `Administrator memperbarui data siswa: ${updated.fullName || 'Siswa'}.`,
+        type: 'info',
+        role: 'all'
+      });
       showSuccessToast('Data siswa berhasil diperbarui.');
     } catch (err: any) {
       console.error('[Supabase DB Exception] updateStudent failed:', err);
@@ -1104,6 +1181,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       await loadDataFromSupabase();
       logActivity('INPUT_NILAI', `Menyimpan nilai siswa`);
+      addNotification({
+        title: 'Nilai Siswa Disimpan',
+        message: `Guru telah menyimpan/memperbarui rekapitulasi nilai siswa.`,
+        type: 'success',
+        role: 'all'
+      });
       showSuccessToast('Nilai siswa berhasil disimpan.');
     } catch (err: any) {
       console.error('[Supabase DB Exception] saveGrade failed:', err);
@@ -1165,6 +1248,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       await loadDataFromSupabase();
       logActivity('INPUT_ABSENSI', `Memproses absensi untuk ${records.length} siswa`);
+      addNotification({
+        title: 'Presensi Siswa Disimpan',
+        message: `Guru telah memperbarui data presensi harian untuk ${records.length} siswa.`,
+        type: 'success',
+        role: 'all'
+      });
       showSuccessToast(`Berhasil menyimpan absensi ${records.length} siswa.`);
     } catch (err: any) {
       console.error('[Supabase DB Exception] saveAttendanceBatch failed:', err);
@@ -1206,6 +1295,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       await loadDataFromSupabase();
       logActivity('TAMBAH_JURNAL', `Menambahkan jurnal mengajar ${journal.topic}`);
+      addNotification({
+        title: 'Jurnal Mengajar Disimpan',
+        message: `Guru telah mencatat jurnal mengajar baru: "${journal.topic}".`,
+        type: 'success',
+        role: 'all'
+      });
       showSuccessToast('Jurnal mengajar berhasil disimpan.');
     } catch (err: any) {
       console.error('[Supabase DB Exception] addJournal failed:', err);
@@ -1295,6 +1390,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       await loadDataFromSupabase();
       logActivity('UPLOAD_MODUL', `Mengunggah arsip modul/RPP "${mod.title}" ke Google Drive & Supabase`);
+      addNotification({
+        title: 'Arsip Modul Ajar/RPP Diunggah',
+        message: `Guru mengunggah arsip Modul Ajar/RPP "${mod.title}" ke Google Drive & database sekolah.`,
+        type: 'success',
+        role: 'all'
+      });
       showSuccessToast('Arsip Modul Ajar / RPP berhasil diunggah dan tersimpan!');
     } catch (err: any) {
       console.error('[Supabase DB Exception] addModule failed:', err);
@@ -1533,6 +1634,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSystemSettings(nextSettings);
         await loadDataFromSupabase();
         logActivity('PENGATURAN_SISTEM', 'Memperbarui Pengaturan Margin Kertas & Kop Surat');
+        addNotification({
+          title: 'Pengaturan Sistem Diperbarui',
+          message: 'Konfigurasi sistem & akademik sekolah telah diperbarui oleh Administrator.',
+          type: 'info',
+          role: 'all'
+        });
         showSuccessToast('Pengaturan sistem berhasil diperbarui.');
       } catch (err: any) {
         console.error('[Supabase DB Exception] updateSystemSettings failed:', err);

@@ -136,7 +136,20 @@ export const PdfExcelService = {
   /**
    * Creates a pre-configured jsPDF instance with exact paper margins & Kop Surat image header
    */
-  async createConfiguredPdf(settings: SystemSettings, title: string, orientation: 'p' | 'l' = 'p') {
+  async createConfiguredPdf(
+    settings: SystemSettings,
+    title: string,
+    meta?: {
+      academicYear?: string;
+      semester?: string;
+      subjectName?: string;
+      gradeLevel?: string;
+      className?: string;
+      teacherName?: string;
+      printDate?: string;
+    },
+    orientation: 'p' | 'l' = 'p'
+  ) {
     const doc = new jsPDF({
       orientation,
       unit: 'mm',
@@ -204,11 +217,46 @@ export const PdfExcelService = {
 
     // Draw Document Title
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.setTextColor(43, 44, 64); // Sneat dark text
+    doc.setFontSize(13);
+    doc.setTextColor(30, 41, 59);
     doc.text(title.toUpperCase(), doc.internal.pageSize.getWidth() / 2, currentY + 4, { align: 'center' });
 
-    currentY += 12;
+    currentY += 10;
+
+    // Draw Dynamic Metadata Header Box if meta provided
+    if (meta) {
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const boxWidth = pageWidth - leftMargin - rightMargin;
+      const boxY = currentY;
+
+      doc.setFillColor(248, 250, 252); // slate-50
+      doc.setDrawColor(226, 232, 240); // slate-200
+      doc.roundedRect(leftMargin, boxY, boxWidth, 18, 2, 2, 'FD');
+
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139); // slate-500
+
+      const col1X = leftMargin + 4;
+      const col2X = leftMargin + (boxWidth / 2) + 4;
+
+      const printDateStr = meta.printDate || this.formatIndonesianDate();
+      const schoolName = settings.schoolInfo?.schoolName || 'SMP Negeri';
+
+      // Line 1
+      doc.text(`Sekolah: ${schoolName}`, col1X, boxY + 5);
+      doc.text(`Tahun Ajaran: ${meta.academicYear || '2025/2026'}`, col2X, boxY + 5);
+
+      // Line 2
+      doc.text(`Mata Pelajaran: ${meta.subjectName || 'Semua Mapel'}`, col1X, boxY + 10);
+      doc.text(`Semester: ${meta.semester || 'Ganjil'}`, col2X, boxY + 10);
+
+      // Line 3
+      doc.text(`Kelas / Tingkat: ${meta.className || 'Semua Kelas'} (${meta.gradeLevel || 'Semua Tingkat'})`, col1X, boxY + 15);
+      doc.text(`Guru: ${meta.teacherName || 'Guru Pengajar'} | Tgl Cetak: ${printDateStr}`, col2X, boxY + 15);
+
+      currentY += 23;
+    }
 
     return { doc, currentY, leftMargin, rightMargin, topMargin };
   },
@@ -216,14 +264,36 @@ export const PdfExcelService = {
   /**
    * Export Rekap Nilai Siswa to PDF
    */
-  async exportGradesPdf(grades: Grade[], settings: SystemSettings, subTitleInfo: string, user?: UserProfile | null, activePrincipal?: SchoolPrincipal | null) {
+  async exportGradesPdf(
+    grades: Grade[],
+    settings: SystemSettings,
+    subTitleInfo: string,
+    user?: UserProfile | null,
+    activePrincipal?: SchoolPrincipal | null,
+    metaInfo?: {
+      academicYear?: string;
+      semester?: string;
+      subjectName?: string;
+      gradeLevel?: string;
+      className?: string;
+    }
+  ) {
     const title = 'Laporan Rekapitulasi Nilai Siswa';
-    const { doc, currentY, leftMargin } = await this.createConfiguredPdf(settings, title, 'p');
+    const teacherName = user?.fullName || 'Guru Pengajar';
 
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(105, 122, 141);
-    doc.text(subTitleInfo, leftMargin, currentY);
+    const { doc, currentY } = await this.createConfiguredPdf(
+      settings,
+      title,
+      {
+        academicYear: metaInfo?.academicYear || '2025/2026',
+        semester: metaInfo?.semester || 'Ganjil',
+        subjectName: metaInfo?.subjectName || 'Semua Mata Pelajaran',
+        gradeLevel: metaInfo?.gradeLevel || 'Semua Tingkat',
+        className: metaInfo?.className || 'Semua Kelas',
+        teacherName
+      },
+      'p'
+    );
 
     const tableData = grades.map((g, index) => [
       index + 1,
@@ -240,7 +310,7 @@ export const PdfExcelService = {
     ]);
 
     autoTable(doc, {
-      startY: currentY + 5,
+      startY: currentY,
       head: [['No', 'NIS', 'Nama Siswa', 'Kelas', 'Tugas', 'Harian', 'PTS', 'PAS', 'Nilai Akhir', 'Predikat', 'Catatan']],
       body: tableData,
       theme: 'grid',
@@ -248,7 +318,7 @@ export const PdfExcelService = {
         fillColor: [105, 108, 255], // Sneat primary purple #696cff
         textColor: 255,
         fontStyle: 'bold',
-        fontSize: 9,
+        fontSize: 8,
         halign: 'center'
       },
       bodyStyles: {
@@ -256,8 +326,9 @@ export const PdfExcelService = {
         textColor: [50, 50, 50]
       },
       columnStyles: {
-        0: { halign: 'center', cellWidth: 10 },
-        1: { halign: 'center', cellWidth: 20 },
+        0: { halign: 'center', cellWidth: 8 },
+        1: { halign: 'center', cellWidth: 18 },
+        3: { halign: 'center', cellWidth: 15 },
         4: { halign: 'center' },
         5: { halign: 'center' },
         6: { halign: 'center' },
@@ -309,14 +380,36 @@ export const PdfExcelService = {
   /**
    * Export Rekap Absensi Siswa to PDF
    */
-  async exportAttendancePdf(attendanceRecords: Attendance[], settings: SystemSettings, subTitleInfo: string, user?: UserProfile | null, activePrincipal?: SchoolPrincipal | null) {
-    const title = 'Laporan Rekapitulasi Absensi Siswa';
-    const { doc, currentY, leftMargin } = await this.createConfiguredPdf(settings, title, 'p');
+  async exportAttendancePdf(
+    attendanceRecords: Attendance[],
+    settings: SystemSettings,
+    subTitleInfo: string,
+    user?: UserProfile | null,
+    activePrincipal?: SchoolPrincipal | null,
+    metaInfo?: {
+      academicYear?: string;
+      semester?: string;
+      subjectName?: string;
+      gradeLevel?: string;
+      className?: string;
+    }
+  ) {
+    const title = 'Laporan Rekapitulasi Presensi Siswa';
+    const teacherName = user?.fullName || 'Guru Pengajar';
 
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(105, 122, 141);
-    doc.text(subTitleInfo, leftMargin, currentY);
+    const { doc, currentY } = await this.createConfiguredPdf(
+      settings,
+      title,
+      {
+        academicYear: metaInfo?.academicYear || '2025/2026',
+        semester: metaInfo?.semester || 'Ganjil',
+        subjectName: metaInfo?.subjectName || 'Semua Mata Pelajaran',
+        gradeLevel: metaInfo?.gradeLevel || 'Semua Tingkat',
+        className: metaInfo?.className || 'Semua Kelas',
+        teacherName
+      },
+      'p'
+    );
 
     const tableData = attendanceRecords.map((att, index) => [
       index + 1,
@@ -328,7 +421,7 @@ export const PdfExcelService = {
     ]);
 
     autoTable(doc, {
-      startY: currentY + 5,
+      startY: currentY,
       head: [['No', 'Tanggal', 'NIS', 'Nama Siswa', 'Status Kehadiran', 'Keterangan']],
       body: tableData,
       theme: 'grid',
@@ -336,7 +429,7 @@ export const PdfExcelService = {
         fillColor: [105, 108, 255],
         textColor: 255,
         fontStyle: 'bold',
-        fontSize: 9,
+        fontSize: 8,
         halign: 'center'
       },
       bodyStyles: {
@@ -345,8 +438,8 @@ export const PdfExcelService = {
       },
       columnStyles: {
         0: { halign: 'center', cellWidth: 10 },
-        1: { halign: 'center', cellWidth: 25 },
-        2: { halign: 'center', cellWidth: 25 },
+        1: { halign: 'center', cellWidth: 22 },
+        2: { halign: 'center', cellWidth: 20 },
         4: { halign: 'center', fontStyle: 'bold' }
       },
       margin: {
@@ -385,14 +478,36 @@ export const PdfExcelService = {
   /**
    * Export Jurnal Mengajar to PDF
    */
-  async exportJournalsPdf(journals: TeachingJournal[], settings: SystemSettings, subTitleInfo: string, user?: UserProfile | null, activePrincipal?: SchoolPrincipal | null) {
+  async exportJournalsPdf(
+    journals: TeachingJournal[],
+    settings: SystemSettings,
+    subTitleInfo: string,
+    user?: UserProfile | null,
+    activePrincipal?: SchoolPrincipal | null,
+    metaInfo?: {
+      academicYear?: string;
+      semester?: string;
+      subjectName?: string;
+      gradeLevel?: string;
+      className?: string;
+    }
+  ) {
     const title = 'Laporan Jurnal Mengajar Guru';
-    const { doc, currentY, leftMargin } = await this.createConfiguredPdf(settings, title, 'l'); // Landscape for rich table
+    const teacherName = user?.fullName || 'Guru Pengajar';
 
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(105, 122, 141);
-    doc.text(subTitleInfo, leftMargin, currentY);
+    const { doc, currentY } = await this.createConfiguredPdf(
+      settings,
+      title,
+      {
+        academicYear: metaInfo?.academicYear || '2025/2026',
+        semester: metaInfo?.semester || 'Ganjil',
+        subjectName: metaInfo?.subjectName || 'Semua Mata Pelajaran',
+        gradeLevel: metaInfo?.gradeLevel || 'Semua Tingkat',
+        className: metaInfo?.className || 'Semua Kelas',
+        teacherName
+      },
+      'p' // A4 Portrait
+    );
 
     const tableData = journals.map((j, index) => [
       index + 1,
@@ -402,14 +517,12 @@ export const PdfExcelService = {
       j.className || '-',
       j.timeSlot,
       j.topic,
-      j.method,
-      `${j.attendeeCount} siswa`,
-      j.notes || '-'
+      `${j.attendeeCount} Siswa`
     ]);
 
     autoTable(doc, {
-      startY: currentY + 5,
-      head: [['No', 'Tanggal', 'Guru', 'Mata Pelajaran', 'Kelas', 'Jam', 'Materi', 'Metode', 'Hadir', 'Catatan']],
+      startY: currentY,
+      head: [['No', 'Tanggal', 'Guru', 'Mata Pelajaran', 'Kelas', 'Jam', 'Materi Pembelajaran', 'Hadir']],
       body: tableData,
       theme: 'grid',
       headStyles: {
@@ -424,10 +537,11 @@ export const PdfExcelService = {
         textColor: [50, 50, 50]
       },
       columnStyles: {
-        0: { halign: 'center', cellWidth: 10 },
-        1: { halign: 'center', cellWidth: 22 },
+        0: { halign: 'center', cellWidth: 8 },
+        1: { halign: 'center', cellWidth: 20 },
         4: { halign: 'center', cellWidth: 15 },
-        8: { halign: 'center', cellWidth: 18 }
+        5: { halign: 'center', cellWidth: 18 },
+        7: { halign: 'center', cellWidth: 18 }
       },
       margin: {
         top: settings.paperMargin.unit === 'cm' ? settings.paperMargin.top * 10 : settings.paperMargin.top,

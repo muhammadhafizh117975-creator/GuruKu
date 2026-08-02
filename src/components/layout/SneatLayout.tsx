@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { Navbar } from './Navbar';
+import { SessionTimeoutManager } from '../common/SessionTimeoutManager';
 import { ShieldCheck, Heart } from 'lucide-react';
 
 interface SneatLayoutProps {
@@ -18,6 +19,9 @@ export const SneatLayout: React.FC<SneatLayoutProps> = ({
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#161625] text-slate-800 dark:text-slate-100 flex flex-col font-sans antialiased transition-colors duration-200">
+      {/* Auto Logout Session Timeout Manager */}
+      <SessionTimeoutManager />
+
       {/* Sidebar */}
       <Sidebar
         activeTab={activeTab}
