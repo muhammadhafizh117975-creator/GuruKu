@@ -60,25 +60,32 @@ export const LaporanAbsensiPage: React.FC = () => {
     { value: 'w5', label: 'Minggu ke-5 (Tgl 29-31)' }
   ];
 
+  const isGuru = user?.role === 'guru';
+
   const filteredAttendance = attendance.filter((a) => {
+    // RBAC check for Guru: only see attendance records for assigned teacher
+    const matchesTeacherAssignment = !isGuru || !a.teacherId || a.teacherId === user?.id;
+
     // 1. Search term
     const matchesSearch =
+      isGuru ||
       !searchTerm ||
       (a.studentName && a.studentName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (a.studentNis && a.studentNis.includes(searchTerm));
 
     // 2. Class
-    const matchesClass = selectedClassFilter === 'all' || a.classId === selectedClassFilter;
+    const matchesClass = isGuru || selectedClassFilter === 'all' || a.classId === selectedClassFilter;
 
     // 3. Subject
-    const matchesSubject = selectedSubjectFilter === 'all' || a.subjectId === selectedSubjectFilter;
+    const matchesSubject = isGuru || selectedSubjectFilter === 'all' || a.subjectId === selectedSubjectFilter;
 
     // 4. Teacher
-    const matchesTeacher = selectedTeacherFilter === 'all' || a.teacherId === selectedTeacherFilter;
+    const matchesTeacher = isGuru || selectedTeacherFilter === 'all' || a.teacherId === selectedTeacherFilter;
 
     // 5. Grade Level
     const targetClass = classes.find((c) => c.id === a.classId);
     const matchesGradeLevel =
+      isGuru ||
       selectedGradeLevelFilter === 'all' ||
       (targetClass && targetClass.gradeLevel === selectedGradeLevelFilter);
 
@@ -98,6 +105,7 @@ export const LaporanAbsensiPage: React.FC = () => {
     const matchesWeek = selectedWeekFilter === 'all' || weekKey === selectedWeekFilter;
 
     return (
+      matchesTeacherAssignment &&
       matchesSearch &&
       matchesClass &&
       matchesSubject &&
@@ -199,121 +207,161 @@ export const LaporanAbsensiPage: React.FC = () => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Pencarian */}
-          <div className="sm:col-span-2 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2.5">
-            <Search className="w-4 h-4 text-slate-400 shrink-0" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Cari nama siswa atau NIS..."
-              className="w-full bg-transparent text-xs font-medium focus:outline-hidden text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
-            />
-          </div>
+        {isGuru ? (
+          /* Tampilan Filter khusus Role Guru: Hanya Bulan dan Minggu */
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Filter Bulanan */}
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-[#696cff] shrink-0" />
+              <select
+                value={selectedMonthFilter}
+                onChange={(e) => setSelectedMonthFilter(e.target.value)}
+                className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+              >
+                <option value="all">Semua Bulan</option>
+                {monthsList.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    Bulan {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* Filter Bulanan */}
-          <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-[#696cff] shrink-0" />
-            <select
-              value={selectedMonthFilter}
-              onChange={(e) => setSelectedMonthFilter(e.target.value)}
-              className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
-            >
-              <option value="all">Semua Bulan</option>
-              {monthsList.map((m) => (
-                <option key={m.value} value={m.value}>
-                  Bulan {m.label}
-                </option>
-              ))}
-            </select>
+            {/* Filter Mingguan */}
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-emerald-500 shrink-0" />
+              <select
+                value={selectedWeekFilter}
+                onChange={(e) => setSelectedWeekFilter(e.target.value)}
+                className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+              >
+                <option value="all">Semua Minggu</option>
+                {weeksList.map((w) => (
+                  <option key={w.value} value={w.value}>
+                    {w.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
+        ) : (
+          /* Tampilan Filter Administrator: Seluruh Filter Tersedia */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Pencarian */}
+            <div className="sm:col-span-2 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2.5">
+              <Search className="w-4 h-4 text-slate-400 shrink-0" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Cari nama siswa atau NIS..."
+                className="w-full bg-transparent text-xs font-medium focus:outline-hidden text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+              />
+            </div>
 
-          {/* Filter Mingguan */}
-          <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-emerald-500 shrink-0" />
-            <select
-              value={selectedWeekFilter}
-              onChange={(e) => setSelectedWeekFilter(e.target.value)}
-              className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
-            >
-              <option value="all">Semua Minggu</option>
-              {weeksList.map((w) => (
-                <option key={w.value} value={w.value}>
-                  {w.label}
-                </option>
-              ))}
-            </select>
-          </div>
+            {/* Filter Bulanan */}
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-[#696cff] shrink-0" />
+              <select
+                value={selectedMonthFilter}
+                onChange={(e) => setSelectedMonthFilter(e.target.value)}
+                className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+              >
+                <option value="all">Semua Bulan</option>
+                {monthsList.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    Bulan {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* Filter Tingkat */}
-          <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
-            <School className="w-4 h-4 text-indigo-500 shrink-0" />
-            <select
-              value={selectedGradeLevelFilter}
-              onChange={(e) => setSelectedGradeLevelFilter(e.target.value)}
-              className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
-            >
-              <option value="all">Semua Tingkat</option>
-              {gradeLevels.map((gl) => (
-                <option key={gl} value={gl}>
-                  Tingkat {gl}
-                </option>
-              ))}
-            </select>
-          </div>
+            {/* Filter Mingguan */}
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-emerald-500 shrink-0" />
+              <select
+                value={selectedWeekFilter}
+                onChange={(e) => setSelectedWeekFilter(e.target.value)}
+                className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+              >
+                <option value="all">Semua Minggu</option>
+                {weeksList.map((w) => (
+                  <option key={w.value} value={w.value}>
+                    {w.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* Filter Kelas */}
-          <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
-            <School className="w-4 h-4 text-[#696cff] shrink-0" />
-            <select
-              value={selectedClassFilter}
-              onChange={(e) => setSelectedClassFilter(e.target.value)}
-              className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
-            >
-              <option value="all">Semua Kelas</option>
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  Kelas {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
+            {/* Filter Tingkat */}
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
+              <School className="w-4 h-4 text-indigo-500 shrink-0" />
+              <select
+                value={selectedGradeLevelFilter}
+                onChange={(e) => setSelectedGradeLevelFilter(e.target.value)}
+                className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+              >
+                <option value="all">Semua Tingkat</option>
+                {gradeLevels.map((gl) => (
+                  <option key={gl} value={gl}>
+                    Tingkat {gl}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* Filter Mata Pelajaran */}
-          <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
-            <BookOpen className="w-4 h-4 text-amber-500 shrink-0" />
-            <select
-              value={selectedSubjectFilter}
-              onChange={(e) => setSelectedSubjectFilter(e.target.value)}
-              className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
-            >
-              <option value="all">Semua Mapel</option>
-              {subjects.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
+            {/* Filter Kelas */}
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
+              <School className="w-4 h-4 text-[#696cff] shrink-0" />
+              <select
+                value={selectedClassFilter}
+                onChange={(e) => setSelectedClassFilter(e.target.value)}
+                className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+              >
+                <option value="all">Semua Kelas</option>
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    Kelas {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* Filter Guru */}
-          <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
-            <User className="w-4 h-4 text-cyan-500 shrink-0" />
-            <select
-              value={selectedTeacherFilter}
-              onChange={(e) => setSelectedTeacherFilter(e.target.value)}
-              className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
-            >
-              <option value="all">Semua Guru Pengajar</option>
-              {teachers.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.fullName}
-                </option>
-              ))}
-            </select>
+            {/* Filter Mata Pelajaran */}
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-amber-500 shrink-0" />
+              <select
+                value={selectedSubjectFilter}
+                onChange={(e) => setSelectedSubjectFilter(e.target.value)}
+                className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+              >
+                <option value="all">Semua Mapel</option>
+                {subjects.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter Guru */}
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
+              <User className="w-4 h-4 text-cyan-500 shrink-0" />
+              <select
+                value={selectedTeacherFilter}
+                onChange={(e) => setSelectedTeacherFilter(e.target.value)}
+                className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+              >
+                <option value="all">Semua Guru Pengajar</option>
+                {teachers.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.fullName}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Table Section */}
