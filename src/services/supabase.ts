@@ -251,7 +251,7 @@ export function generateSupabaseSQLScript(): string {
   return `-- ============================================================
 -- MASTER DATABASE SCHEMA SINKRONISASI TOTAL - GURUKU APP (SUPABASE)
 -- Target Backend: Supabase PostgreSQL
--- Keterangan: Lengkap dengan Table, Relasi, FK, Index, Constraint, Function, Trigger, RLS & Storage
+-- Keterangan: Lengkap dengan Extensions, Table, Views, Relasi, FK, Index, Constraint, Trigger, RLS, Storage & Seed Data
 -- Jalankan di: Supabase Dashboard -> SQL Editor
 -- ============================================================
 
@@ -268,7 +268,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 3. TABEL PROFILES (PENGGUNA: ADMIN & GURU)
+-- 3. TABEL PROFILES (PENGGUNA UTAMA: ADMIN, SUPER_ADMIN, GURU)
 CREATE TABLE IF NOT EXISTS public.profiles (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   email TEXT UNIQUE NOT NULL,
@@ -294,17 +294,23 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_drive_id TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
--- Seed Default Admin & Super Admin Profile jika belum ada
+-- Seed Data Akun Utama (Super Admin, Admin, Guru)
 INSERT INTO public.profiles (id, email, username, password, full_name, role, nip_nuptk, phone)
 VALUES 
   ('user_superadmin_01', 'superadmin@guruku.sch.id', 'superadmin', 'super123', 'Super Admin Utama', 'super_admin', '19750101 199801 1 001', '081111111111'),
-  ('user_admin_01', 'admin@guruku.sch.id', 'admin', 'admin123', 'Administrator Sekolah', 'admin', '19800101 200501 1 001', '081234567890')
+  ('user_admin_01', 'admin@guruku.sch.id', 'admin', 'admin123', 'Administrator Sekolah', 'admin', '19800101 200501 1 001', '081234567890'),
+  ('user_guru_01', 'guru@guruku.sch.id', 'guru', 'guru123', 'Budi Santoso, S.Pd.', 'guru', '19850512 201001 1 003', '081398765432')
 ON CONFLICT (id) DO NOTHING;
 
 DROP TRIGGER IF EXISTS set_profiles_updated_at ON public.profiles;
 CREATE TRIGGER set_profiles_updated_at
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- VIEWS / ALIASES UNTUK KEMUDAHAN QUERY DENGAN RBAC
+CREATE OR REPLACE VIEW public.users AS SELECT * FROM public.profiles;
+CREATE OR REPLACE VIEW public.administrators AS SELECT * FROM public.profiles WHERE role IN ('admin', 'super_admin');
+CREATE OR REPLACE VIEW public.teachers AS SELECT * FROM public.profiles WHERE role = 'guru';
 
 -- 4. TABEL SUBJECTS (MATA PELAJARAN)
 CREATE TABLE IF NOT EXISTS public.subjects (
@@ -328,7 +334,7 @@ CREATE TRIGGER set_subjects_updated_at
   BEFORE UPDATE ON public.subjects
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- 5. TABEL CLASSES (KELAS / ROMBEL)
+-- 5. TABEL CLASSES (ROMBONGAN BELAJAR / KELAS)
 CREATE TABLE IF NOT EXISTS public.classes (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   name TEXT NOT NULL,
@@ -348,7 +354,7 @@ CREATE TRIGGER set_classes_updated_at
   BEFORE UPDATE ON public.classes
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- 6. TABEL STUDENTS (DATA SISWA)
+-- 6. TABEL STUDENTS (DATA SISWA & NIS)
 CREATE TABLE IF NOT EXISTS public.students (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   nis TEXT UNIQUE NOT NULL,
@@ -392,6 +398,13 @@ BEGIN
 
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'students_nis_key' AND table_name = 'students'
+  ) THEN
+    ALTER TABLE public.students ADD CONSTRAINT students_nis_key UNIQUE (nis);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
     WHERE constraint_name = 'chk_students_gender' AND table_name = 'students'
   ) THEN
     ALTER TABLE public.students 
@@ -416,7 +429,7 @@ CREATE INDEX IF NOT EXISTS idx_students_nis ON public.students(nis);
 CREATE INDEX IF NOT EXISTS idx_students_class_id ON public.students(class_id);
 CREATE INDEX IF NOT EXISTS idx_students_status ON public.students(status);
 
--- 7. TABEL GRADES (NILAI SISWA)
+-- 7. TABEL GRADES (PENILAIAN & AKADEMIK)
 CREATE TABLE IF NOT EXISTS public.grades (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   student_id TEXT REFERENCES public.students(id) ON DELETE CASCADE,
@@ -537,12 +550,48 @@ CREATE TRIGGER set_teaching_modules_updated_at
   BEFORE UPDATE ON public.teaching_modules
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- 11. TABEL SYSTEM_SETTINGS
+-- 11. TABEL SYSTEM_SETTINGS, ACADEMIC_SETTINGS & DOCUMENT_SETTINGS
 CREATE TABLE IF NOT EXISTS public.system_settings (
   key TEXT PRIMARY KEY,
   value JSONB NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS public.academic_settings (
+  id TEXT PRIMARY KEY DEFAULT 'academic_config_01',
+  kkm_default NUMERIC DEFAULT 75,
+  assignment_weight NUMERIC DEFAULT 20,
+  daily_weight NUMERIC DEFAULT 30,
+  pts_weight NUMERIC DEFAULT 25,
+  pas_weight NUMERIC DEFAULT 25,
+  a_min NUMERIC DEFAULT 88,
+  b_min NUMERIC DEFAULT 78,
+  c_min NUMERIC DEFAULT 68,
+  academic_year_active TEXT DEFAULT '2025/2026',
+  semester_active CHAR(1) DEFAULT '1',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+INSERT INTO public.academic_settings (id, kkm_default, assignment_weight, daily_weight, pts_weight, pas_weight, a_min, b_min, c_min, academic_year_active, semester_active)
+VALUES ('academic_config_01', 75, 20, 30, 25, 25, 88, 78, 68, '2025/2026', '1')
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS public.document_settings (
+  id TEXT PRIMARY KEY DEFAULT 'document_config_01',
+  school_name TEXT DEFAULT 'SMP NEGERI 1 GURUKU ACADEMIA',
+  address TEXT DEFAULT 'Jl. Pendidikan No. 45, Kompleks Akademik, Jakarta Selatan',
+  phone TEXT DEFAULT '(021) 7890123',
+  email TEXT DEFAULT 'info@smpn1guruku.sch.id',
+  logo_url TEXT,
+  letterhead_image_url TEXT,
+  school_stamp_url TEXT,
+  digital_signature_url TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+INSERT INTO public.document_settings (id, school_name, address, phone, email)
+VALUES ('document_config_01', 'SMP NEGERI 1 GURUKU ACADEMIA', 'Jl. Pendidikan No. 45, Kompleks Akademik, Jakarta Selatan', '(021) 7890123', 'info@smpn1guruku.sch.id')
+ON CONFLICT (id) DO NOTHING;
 
 -- 12. TABEL SCHOOL_PRINCIPALS (DATA KEPALA SEKOLAH)
 CREATE TABLE IF NOT EXISTS public.school_principals (
@@ -585,7 +634,7 @@ ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'all
 ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS icon TEXT;
 ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
--- 14. TABEL ACTIVITY_LOGS (CATATAN AKTIVITAS SISTEM)
+-- 14. TABEL ACTIVITY_LOGS (AUDIT LOG SYSTEM)
 CREATE TABLE IF NOT EXISTS public.activity_logs (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id TEXT,
@@ -596,6 +645,7 @@ CREATE TABLE IF NOT EXISTS public.activity_logs (
 );
 
 -- 15. INDEXES PERFORMA TINGGI
+CREATE INDEX IF NOT EXISTS idx_students_nis ON public.students(nis);
 CREATE INDEX IF NOT EXISTS idx_grades_student_id ON public.grades(student_id);
 CREATE INDEX IF NOT EXISTS idx_grades_subject_id ON public.grades(subject_id);
 CREATE INDEX IF NOT EXISTS idx_grades_class_id ON public.grades(class_id);
@@ -621,6 +671,8 @@ ALTER TABLE public.attendance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.teaching_journals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.teaching_modules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.academic_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.document_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.school_principals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
@@ -634,6 +686,8 @@ DROP POLICY IF EXISTS "Allow full access on attendance" ON public.attendance;
 DROP POLICY IF EXISTS "Allow full access on teaching_journals" ON public.teaching_journals;
 DROP POLICY IF EXISTS "Allow full access on teaching_modules" ON public.teaching_modules;
 DROP POLICY IF EXISTS "Allow full access on system_settings" ON public.system_settings;
+DROP POLICY IF EXISTS "Allow full access on academic_settings" ON public.academic_settings;
+DROP POLICY IF EXISTS "Allow full access on document_settings" ON public.document_settings;
 DROP POLICY IF EXISTS "Allow full access on school_principals" ON public.school_principals;
 DROP POLICY IF EXISTS "Allow full access on notifications" ON public.notifications;
 DROP POLICY IF EXISTS "Allow full access on activity_logs" ON public.activity_logs;
@@ -647,6 +701,8 @@ CREATE POLICY "Allow full access on attendance" ON public.attendance FOR ALL USI
 CREATE POLICY "Allow full access on teaching_journals" ON public.teaching_journals FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow full access on teaching_modules" ON public.teaching_modules FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow full access on system_settings" ON public.system_settings FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow full access on academic_settings" ON public.academic_settings FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow full access on document_settings" ON public.document_settings FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow full access on school_principals" ON public.school_principals FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow full access on notifications" ON public.notifications FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow full access on activity_logs" ON public.activity_logs FOR ALL USING (true) WITH CHECK (true);
@@ -785,14 +841,34 @@ export async function resetSupabaseDatabaseTables(): Promise<boolean> {
     await client.from('grades').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await client.from('teaching_journals').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await client.from('teaching_modules').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await client.from('module_archives').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await client.from('students').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await client.from('classes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await client.from('subjects').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await client.from('notifications').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await client.from('activity_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
-    // Remove profiles except initial admin
-    await client.from('profiles').delete().neq('role', 'admin');
+    // Remove profiles except initial default roles
+    await client.from('profiles').delete().neq('id', 'user_superadmin_01').neq('id', 'user_admin_01').neq('id', 'user_guru_01');
+
+    // Ensure initial profiles are present
+    const defaultProfiles = [
+      { id: 'user_superadmin_01', email: 'superadmin@guruku.sch.id', username: 'superadmin', password: 'super123', full_name: 'Super Admin Utama', role: 'super_admin', nip_nuptk: '19750101 199801 1 001', phone: '081111111111' },
+      { id: 'user_admin_01', email: 'admin@guruku.sch.id', username: 'admin', password: 'admin123', full_name: 'Administrator Sekolah', role: 'admin', nip_nuptk: '19800101 200501 1 001', phone: '081234567890' },
+      { id: 'user_guru_01', email: 'guru@guruku.sch.id', username: 'guru', password: 'guru123', full_name: 'Budi Santoso, S.Pd.', role: 'guru', nip_nuptk: '19850512 201001 1 003', phone: '081398765432' }
+    ];
+    await client.from('profiles').upsert(defaultProfiles);
+
+    // Re-seed system settings
+    await client.from('system_settings').upsert([
+      { key: 'main_config', value: DEFAULT_SYSTEM_SETTINGS, updated_at: new Date().toISOString() },
+      { key: 'academic_years', value: INITIAL_ACADEMIC_YEARS, updated_at: new Date().toISOString() }
+    ]);
+
+    // Re-seed school principals
+    await client.from('school_principals').upsert([
+      { id: 'prn_01', full_name: 'Dr. H. Ahmad Dahlan', title: 'M.Pd.', nip: '19700101 199512 1 002', nuptk: '3456789012345678', position: 'Kepala Sekolah', is_active: true }
+    ]);
 
     return true;
   } catch (err) {
@@ -800,4 +876,5 @@ export async function resetSupabaseDatabaseTables(): Promise<boolean> {
     return false;
   }
 }
+
 

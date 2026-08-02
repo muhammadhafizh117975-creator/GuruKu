@@ -55,6 +55,9 @@ export const SiswaPage: React.FC = () => {
   const [bulkClassId, setBulkClassId] = useState<string>('');
   const [importRows, setImportRows] = useState<BulkImportRow[]>([]);
   const [hasPreviewed, setHasPreviewed] = useState<boolean>(false);
+  const [importMode, setImportMode] = useState<'skip' | 'update' | 'abort'>('skip');
+  const [importReport, setImportReport] = useState<any>(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
 
   const openCreateModal = () => {
     setEditingStudent(null);
@@ -78,6 +81,7 @@ export const SiswaPage: React.FC = () => {
     setRawText('');
     setImportRows([]);
     setHasPreviewed(false);
+    setImportMode('skip');
     setBulkClassId(classes[0]?.id || '');
     setIsBulkModalOpen(true);
   };
@@ -220,9 +224,9 @@ export const SiswaPage: React.FC = () => {
   };
 
   const handleConfirmBulkUpload = async () => {
-    const validRows = importRows.filter((r) => r.isValid);
+    const validRows = importRows.filter((r) => r.nis && r.fullName);
     if (validRows.length === 0) {
-      showErrorToast('Tidak ada data valid yang siap disimpan.');
+      showErrorToast('Tidak ada data yang dapat diproses.');
       return;
     }
 
@@ -234,8 +238,10 @@ export const SiswaPage: React.FC = () => {
       className: r.className
     }));
 
-    await bulkAddStudents(payload);
+    const report = await bulkAddStudents(payload, importMode);
+    setImportReport(report);
     setIsBulkModalOpen(false);
+    setIsReportModalOpen(true);
   };
 
   const handleDelete = async (id: string, name: string) => {
@@ -671,6 +677,48 @@ export const SiswaPage: React.FC = () => {
               </div>
             )}
 
+            {/* Penanganan Duplikat NIS */}
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                Opsi Penanganan Data Duplikat NIS:
+              </label>
+              <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
+                <label className="flex items-center gap-2 cursor-pointer font-medium">
+                  <input
+                    type="radio"
+                    name="importMode"
+                    value="skip"
+                    checked={importMode === 'skip'}
+                    onChange={() => setImportMode('skip')}
+                    className="text-[#696cff] focus:ring-[#696cff]"
+                  />
+                  <span><strong>Lewati (Skip):</strong> Abaikan NIS duplikat dan hanya simpan NIS baru</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer font-medium">
+                  <input
+                    type="radio"
+                    name="importMode"
+                    value="update"
+                    checked={importMode === 'update'}
+                    onChange={() => setImportMode('update')}
+                    className="text-[#696cff] focus:ring-[#696cff]"
+                  />
+                  <span><strong>Perbarui (Update):</strong> Timpa nama, gender & kelas jika NIS sudah ada</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer font-medium">
+                  <input
+                    type="radio"
+                    name="importMode"
+                    value="abort"
+                    checked={importMode === 'abort'}
+                    onChange={() => setImportMode('abort')}
+                    className="text-[#696cff] focus:ring-[#696cff]"
+                  />
+                  <span><strong>Batalkan (Abort):</strong> Batalkan seluruh impor jika ditemukan NIS duplikat</span>
+                </label>
+              </div>
+            </div>
+
             <div className="pt-3 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
@@ -689,7 +737,70 @@ export const SiswaPage: React.FC = () => {
                     : 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-50'
                 }`}
               >
-                <CheckCircle2 className="w-4 h-4" /> Simpan {validRowsCount} Data Siswa
+                <CheckCircle2 className="w-4 h-4" /> Proses Impor ({validRowsCount} Data)
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal Laporan Hasil Impor */}
+      {isReportModalOpen && importReport && (
+        <Modal
+          isOpen={isReportModalOpen}
+          onClose={() => setIsReportModalOpen(false)}
+          title="Laporan Hasil Impor Data Siswa"
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                <p className="text-[10px] uppercase font-bold text-slate-400">Total Data</p>
+                <p className="text-lg font-extrabold text-slate-800 dark:text-slate-100">{importReport.total}</p>
+              </div>
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                <p className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Disimpan Baru</p>
+                <p className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">{importReport.success}</p>
+              </div>
+              <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl border border-indigo-200 dark:border-indigo-800">
+                <p className="text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400">Diperbarui</p>
+                <p className="text-lg font-extrabold text-indigo-600 dark:text-indigo-400">{importReport.updated}</p>
+              </div>
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800">
+                <p className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">Dilewati / Duplikat</p>
+                <p className="text-lg font-extrabold text-amber-600 dark:text-amber-400">{importReport.skipped}</p>
+              </div>
+            </div>
+
+            {importReport.logs && importReport.logs.length > 0 && (
+              <div>
+                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">Rincian Status Impor Data:</h4>
+                <div className="max-h-60 overflow-y-auto p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1.5 text-xs font-mono">
+                  {importReport.logs.map((log: any, idx: number) => (
+                    <div key={idx} className="flex items-start gap-2">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                        log.status === 'success' ? 'bg-emerald-100 text-emerald-800' :
+                        log.status === 'updated' ? 'bg-indigo-100 text-indigo-800' :
+                        log.status === 'skipped' ? 'bg-amber-100 text-amber-800' :
+                        'bg-rose-100 text-rose-800'
+                      }`}>
+                        {log.status.toUpperCase()}
+                      </span>
+                      <p className="text-slate-700 dark:text-slate-300">
+                        <strong>NIS {log.nis}</strong> ({log.name}): {log.reason}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="pt-3 flex justify-end border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsReportModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white font-bold text-xs shadow-md transition-all cursor-pointer"
+              >
+                Selesai & Tutup
               </button>
             </div>
           </div>

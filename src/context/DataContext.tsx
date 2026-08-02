@@ -26,6 +26,15 @@ import { GoogleDriveService } from '../services/googleDrive';
 import { showSuccessToast, showErrorToast } from '../components/common/SweetAlert';
 import { useAuth } from './AuthContext';
 
+export interface BulkImportResult {
+  total: number;
+  success: number;
+  skipped: number;
+  updated: number;
+  failed: number;
+  logs: { nis: string; name: string; reason: string; status: 'skipped' | 'updated' | 'failed' | 'success' }[];
+}
+
 interface DataContextType {
   academicYears: AcademicYearItem[];
   activeAcademicYear: AcademicYearItem;
@@ -72,7 +81,7 @@ interface DataContextType {
   deleteClass: (id: string) => Promise<void>;
 
   addStudent: (std: Omit<Student, 'id' | 'createdAt'>) => Promise<void>;
-  bulkAddStudents: (stds: Omit<Student, 'id' | 'createdAt'>[]) => Promise<void>;
+  bulkAddStudents: (stds: Omit<Student, 'id' | 'createdAt'>[], mode?: 'skip' | 'update' | 'abort') => Promise<BulkImportResult>;
   updateStudent: (id: string, std: Partial<Student>) => Promise<void>;
   deleteStudent: (id: string) => Promise<void>;
 
@@ -1007,48 +1016,209 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const bulkAddStudents = async (stdsList: Omit<Student, 'id' | 'createdAt'>[]) => {
+  const bulkAddStudents = async (
+    stdsList: Omit<Student, 'id' | 'createdAt'>[],
+    mode: 'skip' | 'update' | 'abort' = 'skip'
+  ): Promise<BulkImportResult> => {
+    const result: BulkImportResult = {
+      total: stdsList.length,
+      success: 0,
+      skipped: 0,
+      updated: 0,
+      failed: 0,
+      logs: []
+    };
+
+    if (stdsList.length === 0) return result;
+
     const client = getSupabaseClient();
     if (!client) {
       showErrorToast('Koneksi database Supabase tidak tersedia.');
-      return;
+      result.failed = stdsList.length;
+      return result;
     }
-    if (stdsList.length === 0) return;
 
     try {
-      console.log('[Supabase DB] Bulk inserting students:', stdsList.length);
+      console.log('[Supabase DB] Bulk processing students with mode:', mode);
       const now = new Date().toISOString();
-      const payload = stdsList.map((std, idx) => {
+
+      // 1. Ambil data siswa yang sudah ada di Supabase untuk mencocokkan NIS
+      const { data: existingDbStudents } = await client.from('students').select('id, nis, full_name, class_id');
+      const existingMap = new Map<string, any>();
+      if (existingDbStudents) {
+        existingDbStudents.forEach((st) => {
+          if (st.nis) {
+            existingMap.set(st.nis.trim().toLowerCase(), st);
+          }
+        });
+      }
+
+      // 2. Deteksi duplikat di dalam file impor dan di database
+      const fileNisTracker = new Set<string>();
+      const duplicateDetectedList: { row: Omit<Student, 'id' | 'createdAt'>; reason: string }[] = [];
+
+      for (const std of stdsList) {
+        const nisKey = (std.nis || '').trim().toLowerCase();
+        if (fileNisTracker.has(nisKey)) {
+          duplicateDetectedList.push({ row: std, reason: `NIS ${std.nis} duplikat dalam file impor.` });
+        } else {
+          fileNisTracker.add(nisKey);
+          if (existingMap.has(nisKey)) {
+            duplicateDetectedList.push({ row: std, reason: `NIS ${std.nis} sudah terdaftar.` });
+          }
+        }
+      }
+
+      // Jika Mode = ABORT dan terdapat duplikat -> batalkan seluruh proses
+      if (mode === 'abort' && duplicateDetectedList.length > 0) {
+        result.failed = stdsList.length;
+        duplicateDetectedList.forEach((dup) => {
+          result.logs.push({
+            nis: dup.row.nis,
+            name: dup.row.fullName,
+            reason: dup.reason,
+            status: 'failed'
+          });
+        });
+        showErrorToast(`Proses impor dibatalkan: Ditemukan ${duplicateDetectedList.length} data NIS duplikat.`);
+        return result;
+      }
+
+      // 3. Proses Impor Per Baris sesuai Opsi Pilihan
+      const processedFileNis = new Set<string>();
+      const rowsToInsert: any[] = [];
+
+      for (let idx = 0; idx < stdsList.length; idx++) {
+        const std = stdsList[idx];
+        const nisKey = (std.nis || '').trim().toLowerCase();
         const cls = classes.find((c) => c.id === std.classId || c.name.toLowerCase() === (std.className || '').toLowerCase());
         const targetClassId = cls?.id || std.classId;
-        return {
-          id: `std_bulk_${Date.now()}_${idx}`,
-          nis: std.nis,
-          full_name: std.fullName,
-          gender: std.gender,
-          class_id: (targetClassId && typeof targetClassId === 'string' && targetClassId.trim() !== '') ? targetClassId : null,
-          created_at: now
-        };
-      });
+        const validClassId = (targetClassId && typeof targetClassId === 'string' && targetClassId.trim() !== '') ? targetClassId : null;
 
-      const { error } = await client.from('students').insert(payload);
-      if (error) {
-        console.error('[Supabase DB Error] Bulk insert students failed:', error);
-        showErrorToast(`Gagal mengunggah data siswa: ${error.message}`);
-        return;
+        const isDuplicateInFile = processedFileNis.has(nisKey);
+        processedFileNis.add(nisKey);
+        const existingInDb = existingMap.get(nisKey);
+
+        if (isDuplicateInFile) {
+          result.skipped++;
+          result.logs.push({
+            nis: std.nis,
+            name: std.fullName,
+            reason: `NIS ${std.nis} duplikat dalam file impor.`,
+            status: 'skipped'
+          });
+          continue;
+        }
+
+        if (existingInDb) {
+          if (mode === 'skip') {
+            result.skipped++;
+            result.logs.push({
+              nis: std.nis,
+              name: std.fullName,
+              reason: `NIS ${std.nis} sudah terdaftar.`,
+              status: 'skipped'
+            });
+          } else if (mode === 'update') {
+            const { error: updateErr } = await client
+              .from('students')
+              .update({
+                full_name: std.fullName,
+                gender: std.gender,
+                class_id: validClassId,
+                updated_at: now
+              })
+              .eq('id', existingInDb.id);
+
+            if (updateErr) {
+              result.failed++;
+              result.logs.push({
+                nis: std.nis,
+                name: std.fullName,
+                reason: `Gagal memperbarui NIS ${std.nis}: ${updateErr.message}`,
+                status: 'failed'
+              });
+            } else {
+              result.updated++;
+              result.logs.push({
+                nis: std.nis,
+                name: std.fullName,
+                reason: `NIS ${std.nis} berhasil diperbarui.`,
+                status: 'updated'
+              });
+            }
+          }
+        } else {
+          // Data NIS Baru -> Disiapkan untuk Insert
+          rowsToInsert.push({
+            id: `std_bulk_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 6)}`,
+            nis: std.nis,
+            full_name: std.fullName,
+            gender: std.gender,
+            class_id: validClassId,
+            created_at: now,
+            updated_at: now
+          });
+        }
       }
+
+      // Execution Insert
+      if (rowsToInsert.length > 0) {
+        const { error: insertErr } = await client.from('students').insert(rowsToInsert);
+        if (insertErr) {
+          console.warn('[Supabase DB] Bulk insert error, retrying individual items:', insertErr.message);
+          for (const item of rowsToInsert) {
+            const { error: singleErr } = await client.from('students').insert([item]);
+            if (singleErr) {
+              result.failed++;
+              result.logs.push({
+                nis: item.nis,
+                name: item.full_name,
+                reason: `Gagal menyimpan NIS ${item.nis}: ${singleErr.message}`,
+                status: 'failed'
+              });
+            } else {
+              result.success++;
+              result.logs.push({
+                nis: item.nis,
+                name: item.full_name,
+                reason: `NIS ${item.nis} berhasil disimpan.`,
+                status: 'success'
+              });
+            }
+          }
+        } else {
+          result.success += rowsToInsert.length;
+          rowsToInsert.forEach((item) => {
+            result.logs.push({
+              nis: item.nis,
+              name: item.full_name,
+              reason: `NIS ${item.nis} berhasil disimpan.`,
+              status: 'success'
+            });
+          });
+        }
+      }
+
       await loadDataFromSupabase();
-      logActivity('BULK_UPLOAD_SISWA', `Berhasil mengunggah ${stdsList.length} data siswa baru`);
+      logActivity(
+        'BULK_UPLOAD_SISWA',
+        `Selesai impor data siswa: Total ${result.total}, Berhasil ${result.success}, Diperbarui ${result.updated}, Dilewati ${result.skipped}`
+      );
+
       addNotification({
-        title: 'Impor Data Siswa Berhasil',
-        message: `Administrator berhasil mengimpor ${stdsList.length} data siswa baru ke sistem.`,
+        title: 'Impor Data Siswa Selesai',
+        message: `Impor selesai: ${result.success} disimpan, ${result.updated} diperbarui, ${result.skipped} dilewati.`,
         type: 'success',
         role: 'all'
       });
-      showSuccessToast(`Berhasil mengimpor ${stdsList.length} data siswa baru.`);
+
+      return result;
     } catch (err: any) {
       console.error('[Supabase DB Exception] bulkAddStudents failed:', err);
       showErrorToast(`Gagal mengunggah data siswa: ${err.message || err}`);
+      result.failed = stdsList.length;
+      return result;
     }
   };
 
