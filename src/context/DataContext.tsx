@@ -207,8 +207,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: p.id,
           fullName: p.full_name,
           title: p.title || '',
-          nip: p.nip || '',
-          nuptk: p.nuptk || '',
+          nuks: p.nuks || '',
           position: p.position || 'Kepala Sekolah',
           isActive: Boolean(p.is_active),
           createdAt: p.created_at,
@@ -226,8 +225,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: initP.id,
           full_name: initP.fullName,
           title: initP.title,
-          nip: initP.nip,
-          nuptk: initP.nuptk,
+          nuks: initP.nuks,
           position: initP.position,
           is_active: true,
           created_at: new Date().toISOString()
@@ -734,7 +732,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logActivity('TAMBAH_GURU', `Menambahkan akun guru ${teacher.fullName}`);
       addNotification({
         title: 'Guru Baru Ditambahkan',
-        message: `Administrator menambahkan akun Guru baru: ${teacher.fullName} (${teacher.nipNuptk || 'NIP/NUPTK'}).`,
+        message: `Administrator menambahkan akun Guru baru: ${teacher.fullName} (${teacher.nipNuptk || 'NUPTK'}).`,
         type: 'info',
         role: 'all'
       });
@@ -1663,8 +1661,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         id: newId,
         full_name: p.fullName,
         title: p.title || '',
-        nip: p.nip || null,
-        nuptk: p.nuptk || '',
+        nuks: p.nuks || '',
         position: p.position || 'Kepala Sekolah',
         is_active: Boolean(p.isActive),
         created_at: new Date().toISOString()
@@ -1696,8 +1693,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const payload: any = {};
       if (updated.fullName !== undefined) payload.full_name = updated.fullName;
       if (updated.title !== undefined) payload.title = updated.title;
-      if (updated.nip !== undefined) payload.nip = updated.nip || null;
-      if (updated.nuptk !== undefined) payload.nuptk = updated.nuptk;
+      if (updated.nuks !== undefined) payload.nuks = updated.nuks;
       if (updated.position !== undefined) payload.position = updated.position;
       if (updated.isActive !== undefined) payload.is_active = Boolean(updated.isActive);
       payload.updated_at = new Date().toISOString();
@@ -1766,7 +1762,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const newSchoolInfo = {
           ...systemSettings.schoolInfo,
           headmasterName: formattedName,
-          headmasterNip: activePrn.nuptk || activePrn.nip || ''
+          headmasterNuks: activePrn.nuks || ''
         };
         const newSysConfig = { ...systemSettings, schoolInfo: newSchoolInfo };
         await client.from('system_settings').upsert({ key: 'main_config', value: newSysConfig, updated_at: new Date().toISOString() });

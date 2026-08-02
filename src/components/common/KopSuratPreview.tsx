@@ -110,7 +110,7 @@ export const KopSuratPreview: React.FC<KopSuratPreviewProps> = ({ settings }) =>
             <div className="text-center">
               <p>Jakarta, 2026</p>
               <p className="font-semibold mt-4">Siti Rahmawati, S.Pd.</p>
-              <p className="text-[7px] text-slate-400">NIP. 19850614 201001 2 015</p>
+              <p className="text-[7px] text-slate-400">NUPTK. 3456789012345678</p>
             </div>
           </div>
         </div>

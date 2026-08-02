@@ -77,11 +77,11 @@ export const PanduanGuruPage: React.FC = () => {
       category: 'Profil & Keamanan',
       icon: <UserCheck className="w-5 h-5 text-cyan-500" />,
       title: '3. Kelola Profil & Kata Sandi (Password)',
-      description: 'Memperbarui informasi pribadi, NUPTK/NIP, foto profil, dan mengganti kata sandi.',
+      description: 'Memperbarui informasi pribadi, NUPTK, foto profil, dan mengganti kata sandi.',
       steps: [
         'Klik nama atau foto Anda pada sudut kanan atas header, lalu pilih Profil Pengguna.',
         'Untuk mengubah foto profil: Arahkan kursor ke avatar, klik tombol Unggah Foto, lalu pilih berkas foto dari perangkat Anda.',
-        'Perbarui Nama Lengkap, NUPTK/NIP, Nomor Telepon, dan Alamat jika terdapat penyesuaian data.',
+        'Perbarui Nama Lengkap, NUPTK, Nomor Telepon, dan Alamat jika terdapat penyesuaian data.',
         'Untuk mengganti kata sandi: Masukkan Kata Sandi Saat Ini, ketik Kata Sandi Baru (minimal 6 karakter), lalu konfirmasi dan simpan.'
       ]
     },

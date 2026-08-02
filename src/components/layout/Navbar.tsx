@@ -287,7 +287,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="p-3 border-b border-slate-100 dark:border-slate-800 mb-1">
                 <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{user?.fullName}</p>
                 <p className="text-[10px] text-slate-400 truncate">{user?.email}</p>
-                <p className="text-[10px] text-[#696cff] font-semibold mt-1">NIP: {user?.nipNuptk || 'N/A'}</p>
+                <p className="text-[10px] text-[#696cff] font-semibold mt-1">NUPTK: {user?.nipNuptk || 'N/A'}</p>
               </div>
 
               <div className="space-y-0.5">

@@ -47,14 +47,14 @@ export const PdfExcelService = {
     const currentDateStr = `${city}, ${this.formatIndonesianDate(new Date())}`;
     
     let headmasterName = settings?.schoolInfo?.headmasterName || 'Dr. H. Ahmad Dahlan, M.Pd.';
-    let headmasterNuptk = settings?.schoolInfo?.headmasterNip || '19700101 199512 1 002';
+    let headmasterNuks = settings?.schoolInfo?.headmasterNuks || '21023L0130924241123456';
     let headmasterPosition = 'Kepala Sekolah';
 
     if (activePrincipal) {
       headmasterName = activePrincipal.title
         ? `${activePrincipal.fullName}, ${activePrincipal.title}`
         : activePrincipal.fullName;
-      headmasterNuptk = activePrincipal.nuptk || activePrincipal.nip || '-';
+      headmasterNuks = activePrincipal.nuks || '-';
       headmasterPosition = activePrincipal.position || 'Kepala Sekolah';
     }
 
@@ -90,7 +90,7 @@ export const PdfExcelService = {
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.text(`NUPTK/NIP. ${headmasterNuptk}`, leftX, nameY + 6);
+    doc.text(`NUKS. ${headmasterNuks}`, leftX, nameY + 6);
 
     // Kanan: (Nama Guru) underlined
     doc.setFont('helvetica', 'bold');
@@ -101,7 +101,7 @@ export const PdfExcelService = {
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.text(`NUPTK/NIP. ${teacherNuptk}`, rightX, nameY + 6);
+    doc.text(`NUPTK. ${teacherNuptk}`, rightX, nameY + 6);
 
     return nameY + 12;
   },

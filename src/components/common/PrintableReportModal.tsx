@@ -57,14 +57,14 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
 
   // Kepala Sekolah info
   let headmasterName = schoolInfo?.headmasterName || 'Dr. H. Ahmad Dahlan, M.Pd.';
-  let headmasterNuptk = schoolInfo?.headmasterNip || '19700101 199512 1 002';
+  let headmasterNuks = schoolInfo?.headmasterNuks || '21023L0130924241123456';
   let headmasterPosition = 'Kepala Sekolah';
 
   if (activePrincipal) {
     headmasterName = activePrincipal.title
       ? `${activePrincipal.fullName}, ${activePrincipal.title}`
       : activePrincipal.fullName;
-    headmasterNuptk = activePrincipal.nuptk || activePrincipal.nip || '-';
+    headmasterNuks = activePrincipal.nuks || '-';
     headmasterPosition = activePrincipal.position || 'Kepala Sekolah';
   }
 
@@ -295,7 +295,7 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
                   {headmasterName}
                 </p>
                 <p className="text-[11px] text-slate-600 mt-0.5">
-                  NUPTK/NIP. {headmasterNuptk}
+                  NUKS. {headmasterNuks}
                 </p>
               </div>
 
@@ -310,7 +310,7 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
                   {teacherName}
                 </p>
                 <p className="text-[11px] text-slate-600 mt-0.5">
-                  NUPTK/NIP. {teacherNuptk}
+                  NUPTK. {teacherNuptk}
                 </p>
               </div>
             </div>

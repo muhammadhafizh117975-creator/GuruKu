@@ -79,8 +79,7 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
   const [editingPrincipal, setEditingPrincipal] = useState<SchoolPrincipal | null>(null);
   const [pFullName, setPFullName] = useState<string>('');
   const [pTitle, setPTitle] = useState<string>('');
-  const [pNip, setPNip] = useState<string>('');
-  const [pNuptk, setPNuptk] = useState<string>('');
+  const [pNuks, setPNuks] = useState<string>('');
   const [pPosition, setPPosition] = useState<string>('Kepala Sekolah');
   const [pIsActive, setPIsActive] = useState<boolean>(false);
 
@@ -88,8 +87,7 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
     setEditingPrincipal(null);
     setPFullName('');
     setPTitle('M.Pd.');
-    setPNip('');
-    setPNuptk('');
+    setPNuks('');
     setPPosition('Kepala Sekolah');
     setPIsActive(principals.length === 0);
     setIsPrincipalModalOpen(true);
@@ -99,8 +97,7 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
     setEditingPrincipal(p);
     setPFullName(p.fullName);
     setPTitle(p.title || '');
-    setPNip(p.nip || '');
-    setPNuptk(p.nuptk || '');
+    setPNuks(p.nuks || '');
     setPPosition(p.position || 'Kepala Sekolah');
     setPIsActive(p.isActive);
     setIsPrincipalModalOpen(true);
@@ -116,8 +113,7 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
       await updatePrincipal(editingPrincipal.id, {
         fullName: pFullName.trim(),
         title: pTitle.trim(),
-        nip: pNip.trim() || undefined,
-        nuptk: pNuptk.trim(),
+        nuks: pNuks.trim(),
         position: pPosition.trim() || 'Kepala Sekolah',
         isActive: pIsActive
       });
@@ -125,8 +121,7 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
       await addPrincipal({
         fullName: pFullName.trim(),
         title: pTitle.trim(),
-        nip: pNip.trim() || undefined,
-        nuptk: pNuptk.trim(),
+        nuks: pNuks.trim(),
         position: pPosition.trim() || 'Kepala Sekolah',
         isActive: pIsActive
       });
@@ -149,8 +144,7 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
     return (
       p.fullName.toLowerCase().includes(term) ||
       (p.title && p.title.toLowerCase().includes(term)) ||
-      (p.nip && p.nip.includes(term)) ||
-      (p.nuptk && p.nuptk.includes(term)) ||
+      (p.nuks && p.nuks.toLowerCase().includes(term)) ||
       (p.position && p.position.toLowerCase().includes(term))
     );
   });
@@ -316,7 +310,7 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
   const [schoolEmail, setSchoolEmail] = useState<string>(systemSettings?.schoolInfo?.email ?? 'info@smpn1guruku.sch.id');
   const [schoolPhone, setSchoolPhone] = useState<string>(systemSettings?.schoolInfo?.phone ?? '(021) 7890123');
   const [headmasterName, setHeadmasterName] = useState<string>(systemSettings?.schoolInfo?.headmasterName ?? 'Dr. H. Ahmad Dahlan, M.Pd.');
-  const [headmasterNip, setHeadmasterNip] = useState<string>(systemSettings?.schoolInfo?.headmasterNip ?? '19700101 199512 1 002');
+  const [headmasterNuks, setHeadmasterNuks] = useState<string>(systemSettings?.schoolInfo?.headmasterNuks ?? '21023L0130924241123456');
   const [timeZone, setTimeZone] = useState<string>(systemSettings?.schoolInfo?.timeZone ?? 'Asia/Jakarta (WIB)');
   const [dateFormat, setDateFormat] = useState<string>(systemSettings?.schoolInfo?.dateFormat ?? 'DD/MM/YYYY');
 
@@ -487,7 +481,7 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
         academicYearActive: activeAcademicYear.year,
         semesterActive: activeAcademicYear.semester,
         headmasterName,
-        headmasterNip
+        headmasterNuks
       }
     });
     showSuccessToast('Pengaturan Identitas Sekolah & Sistem Regional berhasil diperbarui!');
@@ -1258,14 +1252,14 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    NUPTK / NIP Kepala Sekolah *
+                    NUKS Kepala Sekolah *
                   </label>
                   <input
                     type="text"
                     required
-                    value={headmasterNip}
-                    onChange={(e) => setHeadmasterNip(e.target.value)}
-                    placeholder="Contoh: 19700101 199512 1 002"
+                    value={headmasterNuks}
+                    onChange={(e) => setHeadmasterNuks(e.target.value)}
+                    placeholder="Contoh: 21023L0130924241123456"
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-[#696cff]"
                   />
                 </div>
@@ -1351,7 +1345,7 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
                   type="text"
                   value={principalSearch}
                   onChange={(e) => setPrincipalSearch(e.target.value)}
-                  placeholder="Cari Kepala Sekolah berdasarkan nama, NUPTK, NIP, atau jabatan..."
+                  placeholder="Cari Kepala Sekolah berdasarkan nama, NUKS, atau jabatan..."
                   className="w-full pl-10 pr-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#696cff]"
                 />
               </div>
@@ -1364,8 +1358,7 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
                   <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-extrabold uppercase text-[10px] tracking-wider border-b border-slate-200 dark:border-slate-800">
                     <th className="py-3.5 px-4 text-center">No</th>
                     <th className="py-3.5 px-4">Nama Lengkap & Gelar</th>
-                    <th className="py-3.5 px-4">NUPTK</th>
-                    <th className="py-3.5 px-4">NIP</th>
+                    <th className="py-3.5 px-4">NUKS</th>
                     <th className="py-3.5 px-4">Jabatan</th>
                     <th className="py-3.5 px-4 text-center">Status</th>
                     <th className="py-3.5 px-4 text-center">Aksi</th>
@@ -1374,7 +1367,7 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 font-medium">
                   {filteredPrincipals.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-slate-400">
+                      <td colSpan={6} className="py-8 text-center text-slate-400">
                         Tidak ada data Kepala Sekolah yang ditemukan.
                       </td>
                     </tr>
@@ -1385,8 +1378,7 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
                         <td className="py-3.5 px-4 font-bold text-slate-800 dark:text-slate-100">
                           {p.fullName}{p.title ? `, ${p.title}` : ''}
                         </td>
-                        <td className="py-3.5 px-4 font-mono">{p.nuptk || '-'}</td>
-                        <td className="py-3.5 px-4 font-mono">{p.nip || '-'}</td>
+                        <td className="py-3.5 px-4 font-mono">{p.nuks || '-'}</td>
                         <td className="py-3.5 px-4">{p.position || 'Kepala Sekolah'}</td>
                         <td className="py-3.5 px-4 text-center">
                           {p.isActive ? (
@@ -2762,44 +2754,30 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
 
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Jabatan
+                NUKS (Nomor Unik Kepala Sekolah) *
               </label>
               <input
                 type="text"
-                value={pPosition}
-                onChange={(e) => setPPosition(e.target.value)}
-                placeholder="Contoh: Kepala Sekolah"
+                required
+                value={pNuks}
+                onChange={(e) => setPNuks(e.target.value)}
+                placeholder="Contoh: 21023L0130924241123456"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-[#696cff]"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                NUPTK
-              </label>
-              <input
-                type="text"
-                value={pNuptk}
-                onChange={(e) => setPNuptk(e.target.value)}
-                placeholder="Contoh: 197001011995121002"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-[#696cff]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                NIP (Opsional)
-              </label>
-              <input
-                type="text"
-                value={pNip}
-                onChange={(e) => setPNip(e.target.value)}
-                placeholder="Contoh: 19700101 199512 1 002"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-[#696cff]"
-              />
-            </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              Jabatan
+            </label>
+            <input
+              type="text"
+              value={pPosition}
+              onChange={(e) => setPPosition(e.target.value)}
+              placeholder="Contoh: Kepala Sekolah"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-[#696cff]"
+            />
           </div>
 
           <div className="flex items-center gap-2 pt-2">

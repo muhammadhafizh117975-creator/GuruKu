@@ -35,14 +35,14 @@ export const ProfilPage: React.FC = () => {
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation for NIP / NUPTK
+    // Validation for NUPTK
     const cleanNip = nipNuptk.trim();
     if (!cleanNip) {
-      showErrorToast('NIP / NUPTK tidak boleh kosong.');
+      showErrorToast('NUPTK tidak boleh kosong.');
       return;
     }
     if (!/^[\d\s\-]{5,30}$/.test(cleanNip)) {
-      showErrorToast('Format NIP / NUPTK tidak valid. Harus berisi 5 - 30 karakter angka, spasi, atau tanda hubung (-).');
+      showErrorToast('Format NUPTK tidak valid. Harus berisi 5 - 30 karakter angka, spasi, atau tanda hubung (-).');
       return;
     }
 
@@ -66,7 +66,7 @@ export const ProfilPage: React.FC = () => {
     });
     setIsSaving(false);
     if (success) {
-      showSuccessToast('Profil dan NIP / NUPTK berhasil diperbarui ke database.');
+      showSuccessToast('Profil dan NUPTK berhasil diperbarui ke database.');
     }
   };
 
@@ -141,12 +141,12 @@ export const ProfilPage: React.FC = () => {
                 <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{user?.fullName}</h3>
                 <p className="text-xs text-slate-400">{user?.email}</p>
                 <div className="mt-2 flex items-center gap-2">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">NIP / NUPTK:</span>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">NUPTK:</span>
                   <input
                     type="text"
                     value={nipNuptk}
                     onChange={(e) => setNipNuptk(e.target.value)}
-                    placeholder="Masukkan NIP / NUPTK"
+                    placeholder="Masukkan NUPTK"
                     className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-[#696cff] focus:ring-2 focus:ring-[#696cff] outline-none"
                   />
                 </div>
@@ -184,7 +184,7 @@ export const ProfilPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">NIP / NUPTK</label>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">NUPTK</label>
                   <input
                     type="text"
                     value={nipNuptk}

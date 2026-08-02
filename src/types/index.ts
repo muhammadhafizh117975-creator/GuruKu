@@ -183,7 +183,7 @@ export interface SchoolInfoSettings {
   academicYearActive?: string;
   semesterActive?: '1' | '2';
   headmasterName?: string;
-  headmasterNip?: string;
+  headmasterNuks?: string;
 }
 
 export type UserProfile = Profile;
@@ -192,8 +192,7 @@ export interface SchoolPrincipal {
   id: string;
   fullName: string;
   title: string;
-  nip?: string;
-  nuptk: string;
+  nuks: string;
   position: string; // default: 'Kepala Sekolah'
   isActive: boolean;
   createdAt: string;

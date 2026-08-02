@@ -101,8 +101,7 @@ export const INITIAL_PRINCIPALS: SchoolPrincipal[] = [
     id: 'prn_01',
     fullName: 'Dr. H. Ahmad Dahlan',
     title: 'M.Pd.',
-    nip: '19700101 199512 1 002',
-    nuptk: '3456789012345678',
+    nuks: '21023L0130924241123456',
     position: 'Kepala Sekolah',
     isActive: true,
     createdAt: new Date().toISOString(),
@@ -598,17 +597,21 @@ CREATE TABLE IF NOT EXISTS public.school_principals (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   full_name TEXT NOT NULL,
   title TEXT,
-  nip TEXT,
-  nuptk TEXT,
+  nuks TEXT,
   position TEXT DEFAULT 'Kepala Sekolah',
   is_active BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-INSERT INTO public.school_principals (id, full_name, title, nip, nuptk, position, is_active)
+-- Migrasi struktur jika tabel lama memiliki kolom nip/nuptk
+ALTER TABLE public.school_principals DROP COLUMN IF EXISTS nip;
+ALTER TABLE public.school_principals DROP COLUMN IF EXISTS nuptk;
+ALTER TABLE public.school_principals ADD COLUMN IF NOT EXISTS nuks TEXT;
+
+INSERT INTO public.school_principals (id, full_name, title, nuks, position, is_active)
 VALUES 
-  ('prn_01', 'Dr. H. Ahmad Dahlan', 'M.Pd.', '19700101 199512 1 002', '3456789012345678', 'Kepala Sekolah', true)
+  ('prn_01', 'Dr. H. Ahmad Dahlan', 'M.Pd.', '21023L0130924241123456', 'Kepala Sekolah', true)
 ON CONFLICT (id) DO NOTHING;
 
 DROP TRIGGER IF EXISTS set_school_principals_updated_at ON public.school_principals;
@@ -867,7 +870,7 @@ export async function resetSupabaseDatabaseTables(): Promise<boolean> {
 
     // Re-seed school principals
     await client.from('school_principals').upsert([
-      { id: 'prn_01', full_name: 'Dr. H. Ahmad Dahlan', title: 'M.Pd.', nip: '19700101 199512 1 002', nuptk: '3456789012345678', position: 'Kepala Sekolah', is_active: true }
+      { id: 'prn_01', full_name: 'Dr. H. Ahmad Dahlan', title: 'M.Pd.', nuks: '21023L0130924241123456', position: 'Kepala Sekolah', is_active: true }
     ]);
 
     return true;

@@ -233,7 +233,7 @@ Password: ${createdGuruInfo.password}`;
   const handleDownloadTemplate = () => {
     const templateData = [
       {
-        'NUPTK/NIP': '198501012010011001',
+        'NUPTK': '3456789012345678',
         'Nama Lengkap': 'Ahmad Subagja, M.Pd.',
         'Email': 'ahmad.subagja@smp.sch.id',
         'Username': 'ahmad_subagja',
@@ -243,7 +243,7 @@ Password: ${createdGuruInfo.password}`;
         'Role': 'Guru'
       },
       {
-        'NUPTK/NIP': '199002022015022002',
+        'NUPTK': '8765432109876543',
         'Nama Lengkap': 'Siti Nurhaliza, S.Pd.',
         'Email': 'siti.nurhaliza@smp.sch.id',
         'Username': 'siti_nurhaliza',
@@ -523,7 +523,7 @@ Password: ${createdGuruInfo.password}`;
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Cari berdasarkan nama, username (@siti_rahma), NIP/NUPTK, atau email..."
+          placeholder="Cari berdasarkan nama, username (@siti_rahma), NUPTK, atau email..."
           className="w-full bg-transparent text-sm focus:outline-hidden text-slate-800 dark:text-slate-100 placeholder:text-slate-400 font-medium"
         />
       </div>
@@ -554,7 +554,7 @@ Password: ${createdGuruInfo.password}`;
                           <AtSign className="w-2.5 h-2.5" />
                           {teacher.username || 'guru_user'}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-semibold">NIP: {teacher.nipNuptk || 'N/A'}</span>
+                        <span className="text-[10px] text-slate-400 font-semibold">NUPTK: {teacher.nipNuptk || 'N/A'}</span>
                       </div>
                     </div>
                   </div>
@@ -682,13 +682,13 @@ Password: ${createdGuruInfo.password}`;
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">NIP / NUPTK *</label>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">NUPTK *</label>
             <input
               type="text"
               required
               value={nipNuptk}
               onChange={(e) => setNipNuptk(e.target.value)}
-              placeholder="19850614 201001 2 015"
+              placeholder="3456789012345678"
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff]"
             />
           </div>
@@ -918,13 +918,13 @@ Password: ${createdGuruInfo.password}`;
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">NIP / NUPTK *</label>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">NUPTK *</label>
                 <input
                   type="text"
                   required
                   value={editNipNuptk}
                   onChange={(e) => setEditNipNuptk(e.target.value)}
-                  placeholder="19850614 201001 2 015"
+                  placeholder="3456789012345678"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs focus:ring-2 focus:ring-[#696cff]"
                 />
               </div>
@@ -1233,7 +1233,7 @@ Password: ${createdGuruInfo.password}`;
               <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 font-bold sticky top-0">
                 <tr>
                   <th className="p-3">No</th>
-                  <th className="p-3">Nama & NIP</th>
+                  <th className="p-3">Nama & NUPTK</th>
                   <th className="p-3">Email & Username</th>
                   <th className="p-3">Mapel / Kelas</th>
                   <th className="p-3 text-center">Status</th>
@@ -1252,7 +1252,7 @@ Password: ${createdGuruInfo.password}`;
                       <td className="p-3 font-bold text-slate-400">{idx + 1}</td>
                       <td className="p-3">
                         <p className="font-bold text-slate-800 dark:text-slate-100">{row.fullName || '-'}</p>
-                        <p className="text-[10px] text-slate-400">NIP: {row.nipNuptk || '-'}</p>
+                        <p className="text-[10px] text-slate-400">NUPTK: {row.nipNuptk || '-'}</p>
                       </td>
                       <td className="p-3">
                         <p className="font-semibold text-slate-700 dark:text-slate-200">{row.email || '-'}</p>
