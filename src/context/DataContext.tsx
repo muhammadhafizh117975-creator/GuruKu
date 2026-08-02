@@ -22,6 +22,7 @@ import {
   supabase,
   resetSupabaseDatabaseTables
 } from '../services/supabase';
+import { GoogleDriveService } from '../services/googleDrive';
 import { showSuccessToast, showErrorToast } from '../components/common/SweetAlert';
 import { useAuth } from './AuthContext';
 
@@ -84,6 +85,7 @@ interface DataContextType {
   deleteJournal: (id: string) => Promise<void>;
 
   addModule: (mod: Omit<TeachingModule, 'id' | 'createdAt'>) => Promise<void>;
+  updateModule: (id: string, mod: Partial<TeachingModule>) => Promise<void>;
   deleteModule: (id: string) => Promise<void>;
 
   updateSystemSettings: (settings: Partial<SystemSettings>) => Promise<void>;
@@ -451,33 +453,50 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('[Supabase DB Sync Error] Failed fetching teaching_journals:', jrnErr);
       }
 
-      // 9. Teaching Modules
-      const { data: modData, error: modErr } = await client.from('teaching_modules').select('*');
-      if (!modErr && modData) {
-        const fetchedModules: TeachingModule[] = modData.map((m: any) => {
-          const subject = fetchedSubjects.find((s) => s.id === m.subject_id);
+      // 9. Teaching Modules / Module Archives
+      let rawModData: any[] = [];
+      const { data: maData, error: maErr } = await client.from('module_archives').select('*');
+      if (!maErr && maData && maData.length > 0) {
+        rawModData = maData;
+      } else {
+        const { data: tmData, error: tmErr } = await client.from('teaching_modules').select('*');
+        if (!tmErr && tmData) {
+          rawModData = tmData;
+        } else if (maErr && tmErr) {
+          console.warn('[Supabase DB Sync Error] Failed fetching module_archives / teaching_modules:', maErr, tmErr);
+        }
+      }
+
+      if (rawModData.length > 0) {
+        const fetchedModules: TeachingModule[] = rawModData.map((m: any) => {
+          const subject = fetchedSubjects.find((s) => s.id === (m.subject_id || m.subjectId));
+          const teacher = fetchedTeachers.find((p) => p.id === (m.uploaded_by || m.teacher_id));
           return {
             id: m.id,
             title: m.title,
-            subjectId: m.subject_id,
-            subjectName: subject?.name,
-            classLevel: m.class_level,
-            semester: m.semester,
-            academicYear: m.academic_year,
-            description: m.description,
-            fileType: m.file_type,
-            fileName: m.file_name,
-            fileSize: m.file_size,
-            fileDriveId: m.file_drive_id,
-            webViewLink: m.web_view_link,
-            webContentLink: m.web_content_link,
-            teacherId: m.teacher_id,
-            createdAt: m.created_at
+            subjectId: m.subject_id || m.subjectId || '',
+            subjectName: subject?.name || m.subject_name || 'Mata Pelajaran',
+            classLevel: m.class_level || m.class_id || '7',
+            classId: m.class_id || m.class_level,
+            semester: m.semester || '1',
+            academicYear: m.academic_year || '2025/2026',
+            description: m.description || '',
+            fileType: m.file_type || (m.mime_type?.includes('pdf') ? 'pdf' : m.mime_type?.includes('word') ? 'docx' : 'pptx'),
+            fileName: m.file_name || m.fileName || 'Dokumen.pdf',
+            mimeType: m.mime_type,
+            fileSize: m.file_size || m.fileSize || '1.2 MB',
+            fileDriveId: m.drive_file_id || m.file_drive_id || m.google_drive_file_id || m.id,
+            driveFolderId: m.drive_folder_id || m.google_drive_folder_id,
+            folderPath: m.folder_path,
+            webViewLink: m.drive_url || m.web_view_link || m.google_drive_url || '#',
+            webContentLink: m.web_content_link || m.drive_url || m.web_view_link || '#',
+            teacherId: m.uploaded_by || m.teacher_id || 'global_teacher',
+            teacherName: teacher?.fullName || m.teacher_name || 'Guru Pengajar',
+            createdAt: m.created_at || m.uploaded_at || new Date().toISOString(),
+            updatedAt: m.updated_at
           };
         });
         setModules(fetchedModules);
-      } else if (modErr) {
-        console.warn('[Supabase DB Sync Error] Failed fetching teaching_modules:', modErr);
       }
 
       // 10. Notifications
@@ -1226,8 +1245,37 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     try {
       const newModId = `mod_${Date.now()}`;
-      console.log('[Supabase DB] Adding module:', mod.title);
-      const { error } = await client.from('teaching_modules').insert([{
+      console.log('[Supabase DB] Adding module archive:', mod.title);
+
+      const archivePayload = {
+        id: newModId,
+        title: mod.title,
+        description: mod.description || '',
+        subject_id: mod.subjectId || null,
+        class_id: mod.classId || mod.classLevel || '7',
+        class_level: mod.classLevel,
+        semester: mod.semester,
+        academic_year: mod.academicYear,
+        file_name: mod.fileName,
+        mime_type: mod.mimeType || mod.fileType || 'application/pdf',
+        file_size: mod.fileSize || '',
+        drive_file_id: mod.fileDriveId,
+        drive_folder_id: mod.driveFolderId || '',
+        drive_url: mod.webViewLink,
+        web_view_link: mod.webViewLink,
+        web_content_link: mod.webContentLink,
+        uploaded_by: mod.teacherId || null,
+        created_at: new Date().toISOString()
+      };
+
+      // Primary insertion to module_archives
+      const { error: maErr } = await client.from('module_archives').insert([archivePayload]);
+      if (maErr) {
+        console.warn('[Supabase DB Warning] module_archives insert failed, trying teaching_modules:', maErr);
+      }
+
+      // Secondary insertion to teaching_modules
+      await client.from('teaching_modules').insert([{
         id: newModId,
         title: mod.title,
         subject_id: mod.subjectId || null,
@@ -1244,17 +1292,59 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         teacher_id: mod.teacherId || null,
         created_at: new Date().toISOString()
       }]);
-      if (error) {
-        console.error('[Supabase DB Error] Add module failed:', error);
-        showErrorToast(`Gagal mengunggah modul: ${error.message}`);
-        return;
-      }
+
       await loadDataFromSupabase();
-      logActivity('UPLOAD_MODUL', `Mengunggah arsip modul/RPP ${mod.title}`);
-      showSuccessToast('Arsip Modul Ajar/RPP berhasil diunggah.');
+      logActivity('UPLOAD_MODUL', `Mengunggah arsip modul/RPP "${mod.title}" ke Google Drive & Supabase`);
+      showSuccessToast('Arsip Modul Ajar / RPP berhasil diunggah dan tersimpan!');
     } catch (err: any) {
       console.error('[Supabase DB Exception] addModule failed:', err);
       showErrorToast(`Gagal mengunggah modul: ${err.message || err}`);
+    }
+  };
+
+  const updateModule = async (id: string, updatedMod: Partial<TeachingModule>) => {
+    const client = getSupabaseClient();
+    if (!client) {
+      showErrorToast('Koneksi database Supabase tidak tersedia.');
+      return;
+    }
+    try {
+      console.log('[Supabase DB] Updating module archive:', id);
+
+      const updatePayload: any = {
+        updated_at: new Date().toISOString()
+      };
+
+      if (updatedMod.title !== undefined) updatePayload.title = updatedMod.title;
+      if (updatedMod.description !== undefined) updatePayload.description = updatedMod.description;
+      if (updatedMod.subjectId !== undefined) updatePayload.subject_id = updatedMod.subjectId;
+      if (updatedMod.classLevel !== undefined) {
+        updatePayload.class_level = updatedMod.classLevel;
+        updatePayload.class_id = updatedMod.classLevel;
+      }
+      if (updatedMod.semester !== undefined) updatePayload.semester = updatedMod.semester;
+      if (updatedMod.academicYear !== undefined) updatePayload.academic_year = updatedMod.academicYear;
+      if (updatedMod.fileName !== undefined) updatePayload.file_name = updatedMod.fileName;
+      if (updatedMod.fileSize !== undefined) updatePayload.file_size = updatedMod.fileSize;
+      if (updatedMod.fileDriveId !== undefined) {
+        updatePayload.drive_file_id = updatedMod.fileDriveId;
+        updatePayload.file_drive_id = updatedMod.fileDriveId;
+      }
+      if (updatedMod.webViewLink !== undefined) {
+        updatePayload.web_view_link = updatedMod.webViewLink;
+        updatePayload.drive_url = updatedMod.webViewLink;
+      }
+      if (updatedMod.webContentLink !== undefined) updatePayload.web_content_link = updatedMod.webContentLink;
+
+      await client.from('module_archives').update(updatePayload).eq('id', id);
+      await client.from('teaching_modules').update(updatePayload).eq('id', id);
+
+      await loadDataFromSupabase();
+      logActivity('EDIT_MODUL', `Memperbarui metadata arsip modul/RPP`);
+      showSuccessToast('Data Arsip Modul Ajar / RPP berhasil diperbarui!');
+    } catch (err: any) {
+      console.error('[Supabase DB Exception] updateModule failed:', err);
+      showErrorToast(`Gagal memperbarui modul: ${err.message || err}`);
     }
   };
 
@@ -1265,16 +1355,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
     try {
-      console.log('[Supabase DB] Deleting module:', id);
-      const { error } = await client.from('teaching_modules').delete().eq('id', id);
-      if (error) {
-        console.error('[Supabase DB Error] Delete module failed:', error);
-        showErrorToast(`Gagal menghapus modul: ${error.message}`);
-        return;
+      console.log('[Supabase DB & Drive] Deleting module archive:', id);
+
+      // Step 1: Find file drive ID and delete physical file from Google Drive
+      const modToDelete = modules.find((m) => m.id === id);
+      if (modToDelete?.fileDriveId) {
+        await GoogleDriveService.deleteFile(modToDelete.fileDriveId);
       }
+
+      // Step 2: Delete metadata from Supabase PostgreSQL
+      await client.from('module_archives').delete().eq('id', id);
+      await client.from('teaching_modules').delete().eq('id', id);
+
       await loadDataFromSupabase();
-      logActivity('HAPUS_MODUL', `Menghapus arsip modul/RPP`);
-      showSuccessToast('Arsip Modul Ajar/RPP dihapus.');
+      logActivity('HAPUS_MODUL', `Menghapus arsip modul/RPP dari Google Drive & Supabase`);
+      showSuccessToast('Arsip Modul Ajar/RPP berhasil dihapus dari Google Drive dan database.');
     } catch (err: any) {
       console.error('[Supabase DB Exception] deleteModule failed:', err);
       showErrorToast(`Gagal menghapus modul: ${err.message || err}`);

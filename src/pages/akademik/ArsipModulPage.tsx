@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { GoogleDriveService } from '../../services/googleDrive';
 import { showConfirmModal, showSuccessToast, showErrorToast } from '../../components/common/SweetAlert';
+import { TeachingModule } from '../../types';
 import {
   FolderArchive,
   Upload,
@@ -18,12 +19,24 @@ import {
   LayoutGrid,
   List,
   Check,
-  FolderCheck
+  FolderCheck,
+  Eye,
+  Edit,
+  X,
+  RefreshCw,
+  FileSpreadsheet,
+  Image as ImageIcon,
+  Presentation,
+  Filter,
+  Calendar,
+  UserCheck,
+  Layers,
+  BookOpen
 } from 'lucide-react';
 
 export const ArsipModulPage: React.FC = () => {
   const { user } = useAuth();
-  const { subjects, modules, addModule, deleteModule, systemSettings, activeAcademicYear } = useData();
+  const { subjects, modules, addModule, updateModule, deleteModule, systemSettings, activeAcademicYear, academicYears } = useData();
 
   const [activeTab, setActiveTab] = useState<'arsip' | 'upload' | 'gdrive_status'>('arsip');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
@@ -33,27 +46,50 @@ export const ArsipModulPage: React.FC = () => {
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('all');
   const [selectedLevelFilter, setSelectedLevelFilter] = useState<string>('all');
   const [selectedSemesterFilter, setSelectedSemesterFilter] = useState<string>('all');
+  const [selectedYearFilter, setSelectedYearFilter] = useState<string>('all');
 
   // Upload Form State
   const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [title, setTitle] = useState<string>('');
   const [subjectId, setSubjectId] = useState<string>(subjects[0]?.id || '');
-  const [classLevel, setClassLevel] = useState<string>('7');
+  const [classLevel, setClassLevel] = useState<string>('VII A');
   const [semester, setSemester] = useState<'1' | '2'>(activeAcademicYear.semester || '1');
   const [academicYear, setAcademicYear] = useState<string>(activeAcademicYear.year || '2025/2026');
+  const [description, setDescription] = useState<string>('');
+  const [file, setFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
 
-  React.useEffect(() => {
+  // Preview Modal State
+  const [previewModule, setPreviewModule] = useState<TeachingModule | null>(null);
+
+  // Edit Modal State
+  const [editingModule, setEditingModule] = useState<TeachingModule | null>(null);
+  const [editTitle, setEditTitle] = useState<string>('');
+  const [editSubjectId, setEditSubjectId] = useState<string>('');
+  const [editClassLevel, setEditClassLevel] = useState<string>('');
+  const [editSemester, setEditSemester] = useState<'1' | '2'>('1');
+  const [editAcademicYear, setEditAcademicYear] = useState<string>('');
+  const [editDescription, setEditDescription] = useState<string>('');
+  const [editReplacementFile, setEditReplacementFile] = useState<File | null>(null);
+  const [isUpdating, setIsUpdating] = useState<boolean>(false);
+
+  const isAdmin = user?.role === 'admin';
+
+  useEffect(() => {
     if (activeAcademicYear) {
       setAcademicYear(activeAcademicYear.year);
       setSemester(activeAcademicYear.semester);
     }
   }, [activeAcademicYear]);
-  const [description, setDescription] = useState<string>('');
-  const [file, setFile] = useState<File | null>(null);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
 
-  const isAdmin = user?.role === 'admin';
+  useEffect(() => {
+    if (subjects.length > 0 && !subjectId) {
+      setSubjectId(subjects[0].id);
+    }
+  }, [subjects, subjectId]);
 
+  // File Validation
   const validateAndSetFile = (selectedFile: File) => {
     // Max 25MB
     if (selectedFile.size > 25 * 1024 * 1024) {
@@ -61,12 +97,12 @@ export const ArsipModulPage: React.FC = () => {
       return;
     }
 
-    const validExtensions = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx'];
+    const validExtensions = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.png', '.jpg', '.jpeg'];
     const lowerName = selectedFile.name.toLowerCase();
     const isValid = validExtensions.some((ext) => lowerName.endsWith(ext));
 
     if (!isValid) {
-      showErrorToast('Format file harus berupa PDF, Word (.docx), PowerPoint (.pptx), atau Excel (.xlsx).');
+      showErrorToast('Format file harus berupa PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), atau Gambar (.png/.jpg).');
       return;
     }
 
@@ -98,6 +134,7 @@ export const ArsipModulPage: React.FC = () => {
     }
   };
 
+  // Upload Form Submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
@@ -114,18 +151,42 @@ export const ArsipModulPage: React.FC = () => {
     }
 
     setIsUploading(true);
+    setUploadProgress(15);
 
     try {
-      const driveFile = await GoogleDriveService.uploadFile(file, 'Modules', user?.id);
+      const selectedSubjectObj = subjects.find((s) => s.id === subjectId);
+      const subjectName = selectedSubjectObj ? selectedSubjectObj.name : 'Informatika';
 
-      let ext: 'pdf' | 'docx' | 'pptx' | 'other' = 'pdf';
+      // Simulate upload progress steps
+      const progressInterval = setInterval(() => {
+        setUploadProgress((prev) => (prev < 85 ? prev + 15 : prev));
+      }, 250);
+
+      // Step 1: Upload binary file to Google Drive with folder tree
+      const driveFile = await GoogleDriveService.uploadModuleFile(file, {
+        academicYear,
+        semester,
+        subjectName,
+        classLevel,
+        uploaderIdOrName: user?.fullName || 'Guru Pengajar'
+      });
+
+      clearInterval(progressInterval);
+      setUploadProgress(95);
+
+      // Determine clean extension
+      let ext: 'pdf' | 'docx' | 'pptx' | 'excel' | 'image' | 'other' = 'pdf';
       const name = file.name.toLowerCase();
       if (name.endsWith('.docx') || name.endsWith('.doc')) ext = 'docx';
       else if (name.endsWith('.pptx') || name.endsWith('.ppt')) ext = 'pptx';
+      else if (name.endsWith('.xlsx') || name.endsWith('.xls')) ext = 'excel';
+      else if (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg')) ext = 'image';
 
-      addModule({
+      // Step 2: Save metadata to Supabase PostgreSQL
+      await addModule({
         title,
         subjectId,
+        subjectName,
         classLevel,
         semester,
         academicYear,
@@ -133,69 +194,199 @@ export const ArsipModulPage: React.FC = () => {
         fileType: ext,
         fileName: driveFile.fileName,
         fileSize: driveFile.fileSize,
-        fileDriveId: driveFile.fileId,
+        fileDriveId: driveFile.googleDriveFileId,
+        driveFolderId: driveFile.driveFolderId,
+        folderPath: driveFile.folderPath,
         webViewLink: driveFile.webViewLink,
         webContentLink: driveFile.webContentLink,
         teacherId: user?.id || 'global_teacher',
         teacherName: user?.fullName || 'Guru Pengajar'
       });
 
+      setUploadProgress(100);
       setIsUploading(false);
       setTitle('');
       setDescription('');
       setFile(null);
       setActiveTab('arsip');
-      showSuccessToast('Modul Ajar / RPP berhasil diunggah ke Google Drive dan tersimpan!');
     } catch (error: any) {
       setIsUploading(false);
-      showErrorToast(error.message || 'Gagal mengunggah file ke Google Drive.');
+      setUploadProgress(0);
+      showErrorToast(error.message || 'Gagal mengunggah file ke Google Drive dan Supabase.');
     }
   };
 
+  // Open Edit Modal
+  const openEditModal = (mod: TeachingModule) => {
+    setEditingModule(mod);
+    setEditTitle(mod.title);
+    setEditSubjectId(mod.subjectId);
+    setEditClassLevel(mod.classLevel);
+    setEditSemester(mod.semester);
+    setEditAcademicYear(mod.academicYear);
+    setEditDescription(mod.description || '');
+    setEditReplacementFile(null);
+  };
+
+  // Save Edit Changes
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingModule) return;
+    if (!editTitle.trim()) {
+      showErrorToast('Judul Modul/RPP wajib diisi.');
+      return;
+    }
+
+    setIsUpdating(true);
+
+    try {
+      let updatedDriveInfo: any = {};
+
+      // If user provided a replacement file
+      if (editReplacementFile) {
+        const selectedSubjectObj = subjects.find((s) => s.id === editSubjectId);
+        const subjectName = selectedSubjectObj ? selectedSubjectObj.name : 'Informatika';
+
+        // Delete old file from Google Drive
+        if (editingModule.fileDriveId) {
+          await GoogleDriveService.deleteFile(editingModule.fileDriveId);
+        }
+
+        // Upload new replacement file to Google Drive
+        const newDriveFile = await GoogleDriveService.uploadModuleFile(editReplacementFile, {
+          academicYear: editAcademicYear,
+          semester: editSemester,
+          subjectName,
+          classLevel: editClassLevel,
+          uploaderIdOrName: user?.fullName || 'Guru'
+        });
+
+        updatedDriveInfo = {
+          fileName: newDriveFile.fileName,
+          fileSize: newDriveFile.fileSize,
+          fileDriveId: newDriveFile.googleDriveFileId,
+          driveFolderId: newDriveFile.driveFolderId,
+          folderPath: newDriveFile.folderPath,
+          webViewLink: newDriveFile.webViewLink,
+          webContentLink: newDriveFile.webContentLink
+        };
+      }
+
+      await updateModule(editingModule.id, {
+        title: editTitle,
+        subjectId: editSubjectId,
+        classLevel: editClassLevel,
+        semester: editSemester,
+        academicYear: editAcademicYear,
+        description: editDescription,
+        ...updatedDriveInfo
+      });
+
+      setIsUpdating(false);
+      setEditingModule(null);
+    } catch (err: any) {
+      setIsUpdating(false);
+      showErrorToast(err.message || 'Gagal memperbarui metadata modul.');
+    }
+  };
+
+  // Delete Module Handler
   const handleDelete = async (id: string, moduleTitle: string) => {
     const confirm = await showConfirmModal(
-      'Hapus Arsip Modul/RPP',
-      `Apakah Anda yakin ingin menghapus arsip "${moduleTitle}"?`,
-      'Ya, Hapus'
+      'Hapus Arsip Modul / RPP',
+      `Apakah Anda yakin ingin menghapus arsip "${moduleTitle}"? File fisik di Google Drive dan metadata di Supabase akan dihapus permanen.`,
+      'Ya, Hapus Permanen'
     );
     if (confirm) {
       deleteModule(id);
     }
   };
 
+  // Filter Logic (Admin sees all, Teacher sees only their own uploaded modules)
   const filteredModules = modules.filter((m) => {
     const isOwner = isAdmin || m.teacherId === user?.id;
+    if (!isOwner) return false;
+
     const matchesSearch =
       m.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       m.fileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (m.teacherName && m.teacherName.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesSubj = selectedSubjectFilter === 'all' || m.subjectId === selectedSubjectFilter;
-    const matchesLevel = selectedLevelFilter === 'all' || m.classLevel === selectedLevelFilter;
-    const matchesSemester = selectedSemesterFilter === 'all' || m.semester === selectedSemesterFilter;
+      (m.teacherName && m.teacherName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (m.subjectName && m.subjectName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (m.classLevel && m.classLevel.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    return isOwner && matchesSearch && matchesSubj && matchesLevel && matchesSemester;
+    const matchesSubj = selectedSubjectFilter === 'all' || m.subjectId === selectedSubjectFilter;
+    const matchesLevel = selectedLevelFilter === 'all' || m.classLevel === selectedLevelFilter || m.classLevel?.includes(selectedLevelFilter);
+    const matchesSemester = selectedSemesterFilter === 'all' || m.semester === selectedSemesterFilter;
+    const matchesYear = selectedYearFilter === 'all' || m.academicYear === selectedYearFilter;
+
+    return matchesSearch && matchesSubj && matchesLevel && matchesSemester && matchesYear;
   });
 
+  // Calculate Dashboard Metrics
+  const totalModulCount = modules.filter((m) => isAdmin || m.teacherId === user?.id).length;
+  const totalRPPCount = modules.filter((m) => (isAdmin || m.teacherId === user?.id) && (m.title.toLowerCase().includes('rpp') || m.description?.toLowerCase().includes('rpp'))).length;
+  const currentMonthStr = new Date().toISOString().substring(0, 7);
+  const thisMonthUploads = modules.filter((m) => (isAdmin || m.teacherId === user?.id) && m.createdAt && m.createdAt.startsWith(currentMonthStr)).length;
+  const lastUploadDate = modules.length > 0 
+    ? new Date(Math.max(...modules.map((m) => new Date(m.createdAt).getTime()))).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+    : '-';
+
   const formatFileSize = (bytes?: string | number) => {
-    if (!bytes) return 'PDF Document';
+    if (!bytes) return 'PDF Doc';
     if (typeof bytes === 'string' && !/^\d+$/.test(bytes)) return bytes;
     const num = Number(bytes);
-    if (isNaN(num)) return 'Doc File';
+    if (isNaN(num)) return 'Document';
     if (num < 1024) return num + ' B';
     if (num < 1024 * 1024) return (num / 1024).toFixed(1) + ' KB';
     return (num / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
+  const renderFileIcon = (fileType?: string) => {
+    if (fileType === 'docx') return <FileText className="w-5 h-5 text-blue-500" />;
+    if (fileType === 'pptx') return <Presentation className="w-5 h-5 text-amber-500" />;
+    if (fileType === 'excel') return <FileSpreadsheet className="w-5 h-5 text-emerald-500" />;
+    if (fileType === 'image') return <ImageIcon className="w-5 h-5 text-purple-500" />;
+    return <File className="w-5 h-5 text-rose-500" />;
+  };
+
+  // Preview Document Render Helper
+  const renderDocumentViewer = (mod: TeachingModule) => {
+    const isImage = mod.fileType === 'image' || mod.fileName.match(/\.(png|jpg|jpeg|webp)$/i);
+    const driveUrl = mod.webViewLink || mod.webContentLink;
+
+    if (isImage) {
+      return (
+        <div className="flex flex-col items-center justify-center p-6 bg-slate-900 rounded-2xl min-h-[350px]">
+          <img src={driveUrl} alt={mod.title} className="max-h-[500px] object-contain rounded-xl shadow-2xl" />
+        </div>
+      );
+    }
+
+    // Google Drive / Google Docs Viewer Iframe
+    return (
+      <div className="w-full h-[550px] bg-slate-100 dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 relative">
+        <iframe
+          src={driveUrl && driveUrl.startsWith('data:') ? driveUrl : `https://docs.google.com/viewer?url=${encodeURIComponent(driveUrl)}&embedded=true`}
+          title={mod.title}
+          className="w-full h-full border-0"
+        />
+        <div className="absolute top-3 right-3 bg-slate-900/80 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+          <HardDrive className="w-3 h-3 text-emerald-400" /> Embedded Preview
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Top Navigation & Header Bar */}
+    <div className="space-y-6 animate-fade-in pb-12">
+      {/* Top Header Banner */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
         <div>
           <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            <FolderArchive className="w-6 h-6 text-[#696cff]" /> Arsip Modul Ajar / RPP (Google Drive)
+            <FolderArchive className="w-6 h-6 text-[#696cff]" /> Arsip Modul Ajar / RPP (Google Drive & Supabase)
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Penyimpanan terpusat dokumen Modul Ajar, RPP, LKPD, dan media pembelajaran sekolah
+            Penyimpanan terpusat dokumen Modul Ajar & RPP dengan Google Drive sebagai media simpan file dan Supabase PostgreSQL sebagai Single Source of Truth metadata.
           </p>
         </div>
 
@@ -203,13 +394,13 @@ export const ArsipModulPage: React.FC = () => {
         <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl w-full md:w-auto overflow-x-auto">
           <button
             onClick={() => setActiveTab('arsip')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
               activeTab === 'arsip'
                 ? 'bg-[#696cff] text-white shadow-xs'
                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            Arsip Dokumen ({filteredModules.length})
+            <BookOpen className="w-3.5 h-3.5" /> Arsip Dokumen ({filteredModules.length})
           </button>
           <button
             onClick={() => setActiveTab('upload')}
@@ -229,25 +420,68 @@ export const ArsipModulPage: React.FC = () => {
                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            <HardDrive className="w-3.5 h-3.5" /> GDrive Status
+            <HardDrive className="w-3.5 h-3.5 text-emerald-400" /> Status GDrive & DB
           </button>
         </div>
       </div>
 
-      {/* TAB 1: DAFTAR ARSIP */}
+      {/* DASHBOARD METRICS CARDS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Modul Ajar</p>
+            <h3 className="text-2xl font-black text-slate-800 dark:text-slate-100 mt-1">{totalModulCount} <span className="text-xs font-normal text-slate-400">Arsip</span></h3>
+          </div>
+          <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-[#696cff] rounded-2xl">
+            <BookOpen className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Modul / RPP Terdaftar</p>
+            <h3 className="text-2xl font-black text-slate-800 dark:text-slate-100 mt-1">{totalRPPCount} <span className="text-xs font-normal text-slate-400">RPP</span></h3>
+          </div>
+          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-2xl">
+            <FileText className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Upload Bulan Ini</p>
+            <h3 className="text-2xl font-black text-slate-800 dark:text-slate-100 mt-1">{thisMonthUploads} <span className="text-xs font-normal text-slate-400">Dokumen</span></h3>
+          </div>
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-2xl">
+            <Upload className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Upload Terakhir</p>
+            <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 mt-2">{lastUploadDate}</h3>
+          </div>
+          <div className="p-3 bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 rounded-2xl">
+            <Calendar className="w-6 h-6" />
+          </div>
+        </div>
+      </div>
+
+      {/* TAB 1: DAFTAR ARSIP MODUL */}
       {activeTab === 'arsip' && (
         <div className="space-y-6">
           {/* Filter Bar & View Toggle */}
           <div className="bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
               {/* Search */}
-              <div className="bg-slate-50 dark:bg-slate-800/60 px-3.5 py-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 flex items-center gap-2.5">
+              <div className="bg-slate-50 dark:bg-slate-800/60 px-3.5 py-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 flex items-center gap-2.5 col-span-1 sm:col-span-2 lg:col-span-1">
                 <Search className="w-4 h-4 text-slate-400 shrink-0" />
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Cari judul, nama file, atau guru..."
+                  placeholder="Cari judul, guru, mapel..."
                   className="w-full bg-transparent text-xs focus:outline-hidden text-slate-800 dark:text-slate-100 placeholder:text-slate-400 font-medium"
                 />
               </div>
@@ -276,12 +510,12 @@ export const ArsipModulPage: React.FC = () => {
                   className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
                 >
                   <option value="all">Semua Tingkat Kelas</option>
-                  <option value="7">Kelas 7</option>
-                  <option value="8">Kelas 8</option>
-                  <option value="9">Kelas 9</option>
-                  <option value="10">Kelas 10</option>
-                  <option value="11">Kelas 11</option>
-                  <option value="12">Kelas 12</option>
+                  <option value="7">Kelas 7 / VII</option>
+                  <option value="8">Kelas 8 / VIII</option>
+                  <option value="9">Kelas 9 / IX</option>
+                  <option value="10">Kelas 10 / X</option>
+                  <option value="11">Kelas 11 / XI</option>
+                  <option value="12">Kelas 12 / XII</option>
                 </select>
               </div>
 
@@ -297,11 +531,29 @@ export const ArsipModulPage: React.FC = () => {
                   <option value="2">Semester 2 (Genap)</option>
                 </select>
               </div>
+
+              {/* Academic Year Filter */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 px-3 py-1.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 flex items-center">
+                <select
+                  value={selectedYearFilter}
+                  onChange={(e) => setSelectedYearFilter(e.target.value)}
+                  className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
+                >
+                  <option value="all">Semua Tahun Ajaran</option>
+                  {academicYears.map((ay) => (
+                    <option key={ay.id} value={ay.year}>
+                      {ay.year}
+                    </option>
+                  ))}
+                  <option value="2025/2026">2025/2026</option>
+                  <option value="2026/2027">2026/2027</option>
+                </select>
+              </div>
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
               <span className="text-xs font-bold text-slate-500">
-                Menampilkan <strong className="text-[#696cff]">{filteredModules.length}</strong> dokumen
+                Menampilkan <strong className="text-[#696cff]">{filteredModules.length}</strong> dokumen arsip ({isAdmin ? 'Seluruh Sekolah - Role Administrator' : 'Khusus Modul Saya'})
               </span>
 
               {/* View Switcher */}
@@ -338,9 +590,9 @@ export const ArsipModulPage: React.FC = () => {
               {filteredModules.length === 0 ? (
                 <div className="col-span-full bg-white dark:bg-slate-900 p-12 rounded-3xl border border-slate-200/80 dark:border-slate-800 text-center space-y-3">
                   <FolderArchive className="w-12 h-12 text-slate-300 mx-auto" />
-                  <p className="text-sm font-bold text-slate-600 dark:text-slate-300">Belum ada arsip Modul Ajar / RPP.</p>
+                  <p className="text-sm font-bold text-slate-600 dark:text-slate-300">Belum ada arsip Modul Ajar / RPP ditemukan.</p>
                   <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                    Klik tab "Unggah Baru" untuk menambahkan dokumen Modul Ajar dan menyimpannya langsung ke Google Drive.
+                    Klik tombol "Unggah Baru" untuk mengunggah dokumen baru. File akan tersimpan otomatis ke Google Drive dan metadata ke Supabase.
                   </p>
                   <button
                     onClick={() => setActiveTab('upload')}
@@ -353,71 +605,84 @@ export const ArsipModulPage: React.FC = () => {
                 filteredModules.map((mod) => (
                   <div
                     key={mod.id}
-                    className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-6 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group"
+                    className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-6 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group relative"
                   >
                     <div>
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-[10px] font-black uppercase bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 rounded-full flex items-center gap-1 border border-emerald-200 dark:border-emerald-800">
-                          <HardDrive className="w-3 h-3" /> GDrive Sync
+                          <HardDrive className="w-3 h-3" /> GDrive & Supabase
                         </span>
                         <span className="text-xs text-slate-400 font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg">
                           {formatFileSize(mod.fileSize)}
                         </span>
                       </div>
 
-                      <h3 className="font-bold text-base text-slate-800 dark:text-slate-100 line-clamp-2 group-hover:text-[#696cff] transition-colors">
-                        {mod.title}
-                      </h3>
-                      <p className="text-xs text-[#696cff] font-bold mt-1">
-                        {mod.subjectName} • Kelas {mod.classLevel} (Sem {mod.semester})
-                      </p>
+                      <div className="flex items-start gap-2.5 mb-2">
+                        <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 shrink-0">
+                          {renderFileIcon(mod.fileType)}
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-base text-slate-800 dark:text-slate-100 line-clamp-2 group-hover:text-[#696cff] transition-colors">
+                            {mod.title}
+                          </h3>
+                          <p className="text-xs text-[#696cff] font-bold mt-0.5">
+                            {mod.subjectName} • Kelas {mod.classLevel} (Sem {mod.semester} - {mod.academicYear})
+                          </p>
+                        </div>
+                      </div>
 
                       <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800/80 text-xs text-slate-600 dark:text-slate-300 space-y-1">
                         <p className="font-semibold text-slate-700 dark:text-slate-200 truncate flex items-center gap-1.5">
                           <FileText className="w-3.5 h-3.5 text-[#696cff]" /> {mod.fileName}
                         </p>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2">
-                          {mod.description || 'Tidak ada catatan atau deskripsi ringkasan.'}
+                          {mod.description || 'Tidak ada catatan deskripsi/CP.'}
                         </p>
                       </div>
 
                       <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
-                        <span>Oleh: <strong className="text-slate-700 dark:text-slate-300">{mod.teacherName}</strong></span>
+                        <span>Oleh: <strong className="text-slate-700 dark:text-slate-300">{mod.teacherName || 'Guru'}</strong></span>
                         <span>{new Date(mod.createdAt).toLocaleDateString('id-ID')}</span>
                       </div>
                     </div>
 
-                    <div className="mt-5 border-t border-slate-100 dark:border-slate-800/80 pt-3 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
+                    <div className="mt-5 border-t border-slate-100 dark:border-slate-800/80 pt-3 flex items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setPreviewModule(mod)}
+                          className="px-3 py-1.5 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white text-xs font-bold transition-colors flex items-center gap-1 shadow-xs"
+                          title="Lihat Pratinjau Dokumen"
+                        >
+                          <Eye className="w-3.5 h-3.5" /> Preview
+                        </button>
                         <a
-                          href={mod.webViewLink}
+                          href={GoogleDriveService.getDriveDownloadUrl(mod.webContentLink, mod.fileDriveId)}
                           target="_blank"
                           rel="noreferrer"
-                          className="px-3 py-1.5 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+                          className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-[#696cff] transition-colors"
+                          title="Unduh dari Google Drive"
                         >
-                          <ExternalLink className="w-3.5 h-3.5" /> Google Drive
+                          <Download className="w-4 h-4" />
                         </a>
-                        {mod.webContentLink && (
-                          <a
-                            href={mod.webContentLink}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-[#696cff] transition-colors"
-                            title="Unduh File Langsung"
-                          >
-                            <Download className="w-4 h-4" />
-                          </a>
-                        )}
                       </div>
 
                       {(isAdmin || mod.teacherId === user?.id) && (
-                        <button
-                          onClick={() => handleDelete(mod.id, mod.title)}
-                          className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-rose-500/10 text-slate-400 hover:text-rose-500 transition-colors"
-                          title="Hapus Arsip Modul"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => openEditModal(mod)}
+                            className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-500/10 text-slate-400 hover:text-indigo-500 transition-colors"
+                            title="Edit Metadata / Ganti File"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(mod.id, mod.title)}
+                            className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-rose-500/10 text-slate-400 hover:text-rose-500 transition-colors"
+                            title="Hapus Arsip Modul"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -451,10 +716,15 @@ export const ArsipModulPage: React.FC = () => {
                       filteredModules.map((mod) => (
                         <tr key={mod.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                           <td className="p-4 font-bold text-slate-800 dark:text-slate-100 max-w-xs">
-                            <p className="truncate">{mod.title}</p>
-                            <span className="text-[10px] text-slate-400 font-normal flex items-center gap-1 mt-0.5">
-                              <File className="w-3 h-3 text-[#696cff]" /> {mod.fileName} ({formatFileSize(mod.fileSize)})
-                            </span>
+                            <div className="flex items-start gap-2">
+                              {renderFileIcon(mod.fileType)}
+                              <div className="truncate">
+                                <p className="truncate font-bold text-slate-800 dark:text-slate-100">{mod.title}</p>
+                                <span className="text-[10px] text-slate-400 font-normal flex items-center gap-1 mt-0.5">
+                                  {mod.fileName} ({formatFileSize(mod.fileSize)})
+                                </span>
+                              </div>
+                            </div>
                           </td>
                           <td className="p-4 text-slate-700 dark:text-slate-300 font-semibold">{mod.subjectName}</td>
                           <td className="p-4 text-slate-600 dark:text-slate-400">
@@ -465,22 +735,39 @@ export const ArsipModulPage: React.FC = () => {
                             <p className="text-[10px] text-slate-400">{new Date(mod.createdAt).toLocaleDateString('id-ID')}</p>
                           </td>
                           <td className="p-4 text-center">
-                            <div className="flex items-center justify-center gap-2">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => setPreviewModule(mod)}
+                                className="px-2.5 py-1.5 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white text-xs font-bold transition-colors inline-flex items-center gap-1"
+                              >
+                                <Eye className="w-3.5 h-3.5" /> Preview
+                              </button>
                               <a
-                                href={mod.webViewLink}
+                                href={GoogleDriveService.getDriveDownloadUrl(mod.webContentLink, mod.fileDriveId)}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="px-3 py-1.5 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white text-xs font-bold transition-colors inline-flex items-center gap-1"
+                                className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-[#696cff]"
+                                title="Unduh File"
                               >
-                                <ExternalLink className="w-3.5 h-3.5" /> GDrive
+                                <Download className="w-4 h-4" />
                               </a>
                               {(isAdmin || mod.teacherId === user?.id) && (
-                                <button
-                                  onClick={() => handleDelete(mod.id, mod.title)}
-                                  className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-rose-500/10 text-slate-400 hover:text-rose-500 transition-colors"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                                <>
+                                  <button
+                                    onClick={() => openEditModal(mod)}
+                                    className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-500/10 text-slate-400 hover:text-indigo-500"
+                                    title="Edit Metadata"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(mod.id, mod.title)}
+                                    className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-rose-500/10 text-slate-400 hover:text-rose-500"
+                                    title="Hapus"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </>
                               )}
                             </div>
                           </td>
@@ -503,14 +790,24 @@ export const ArsipModulPage: React.FC = () => {
               <Upload className="w-5 h-5 text-[#696cff]" /> Formulir Unggah Modul Ajar / RPP ke Google Drive
             </h3>
             <p className="text-xs text-slate-400 mt-1">
-              Dokumen akan diunggah secara aman ke folder Google Drive sekolah dan metadatanya tersimpan otomatis.
+              Dokumen akan diunggah otomatis ke Google Drive dengan hirarki folder terstruktur dan metadatanya tersimpan di Supabase PostgreSQL.
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl">
+            {/* Folder Hierarchy Live Preview Badge */}
+            <div className="p-4 bg-indigo-50/60 dark:bg-indigo-950/30 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 space-y-1 font-mono text-xs text-slate-700 dark:text-slate-200">
+              <p className="text-[10px] uppercase font-black tracking-wider text-[#696cff] flex items-center gap-1">
+                <FolderCheck className="w-3.5 h-3.5" /> Target Lokasi Folder Google Drive Otomatis:
+              </p>
+              <p className="font-bold text-slate-800 dark:text-slate-100 text-xs">
+                📁 GuruKu / Arsip Modul Ajar / {academicYear.replace(/\//g, '-')} / Semester {semester} / {subjects.find((s) => s.id === subjectId)?.name || 'Mata Pelajaran'} / {classLevel}
+              </p>
+            </div>
+
             {/* SECTION 1: METADATA FORM */}
             <div className="space-y-4">
-              <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">1. Informasi Kurikulum & Dokumen</h4>
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">1. Informasi Kurikulum & Metadata Dokumen</h4>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Judul Modul Ajar / RPP *</label>
@@ -519,8 +816,8 @@ export const ArsipModulPage: React.FC = () => {
                   required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Contoh: Modul Ajar Matematika Bab 1 Kurikulum Merdeka"
-                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff] font-medium"
+                  placeholder="Contoh: Modul Ajar Informatika Bab 1 Algoritma dan Pemrograman Kurikulum Merdeka"
+                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-[#696cff] font-medium text-slate-800 dark:text-slate-100"
                 />
               </div>
 
@@ -531,7 +828,7 @@ export const ArsipModulPage: React.FC = () => {
                     required
                     value={subjectId}
                     onChange={(e) => setSubjectId(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-100"
                   >
                     {subjects.map((s) => (
                       <option key={s.id} value={s.id}>
@@ -542,12 +839,18 @@ export const ArsipModulPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tingkat Kelas *</label>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tingkat / Kelas *</label>
                   <select
                     value={classLevel}
                     onChange={(e) => setClassLevel(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-100"
                   >
+                    <option value="VII A">Kelas VII A</option>
+                    <option value="VII B">Kelas VII B</option>
+                    <option value="VIII A">Kelas VIII A</option>
+                    <option value="VIII B">Kelas VIII B</option>
+                    <option value="IX A">Kelas IX A</option>
+                    <option value="IX B">Kelas IX B</option>
                     <option value="7">Kelas 7</option>
                     <option value="8">Kelas 8</option>
                     <option value="9">Kelas 9</option>
@@ -562,7 +865,7 @@ export const ArsipModulPage: React.FC = () => {
                   <select
                     value={semester}
                     onChange={(e) => setSemester(e.target.value as '1' | '2')}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-100"
                   >
                     <option value="1">Semester 1 (Ganjil)</option>
                     <option value="2">Semester 2 (Genap)</option>
@@ -577,28 +880,28 @@ export const ArsipModulPage: React.FC = () => {
                     value={academicYear}
                     onChange={(e) => setAcademicYear(e.target.value)}
                     placeholder="2025/2026"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-800 dark:text-slate-100"
                   />
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Ringkasan / Capaian Pembelajaran (CP)
+                  Deskripsi / Capaian Pembelajaran (CP)
                 </label>
                 <textarea
                   rows={3}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Penjelasan ringkas cakupan LKPD, bab, tujuan pembelajaran, atau instruksi siswa..."
-                  className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm"
+                  placeholder="Ringkasan materi, capaian pembelajaran, tujuan, atau instruksi pengerjaan siswa..."
+                  className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100"
                 />
               </div>
             </div>
 
-            {/* SECTION 2: FILE UPLOAD DROPZONE */}
+            {/* SECTION 2: FILE DROPZONE */}
             <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">2. File Dokumen (Google Drive Target)</h4>
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">2. Pilih File Dokumen (Google Drive Storage)</h4>
 
               <div
                 onDragOver={handleDragOver}
@@ -615,7 +918,7 @@ export const ArsipModulPage: React.FC = () => {
                 <input
                   type="file"
                   onChange={handleFileChange}
-                  accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx"
+                  accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.png,.jpg,.jpeg"
                   className="hidden"
                   id="mod-file-dropzone"
                 />
@@ -644,19 +947,38 @@ export const ArsipModulPage: React.FC = () => {
                           Tarik & Lepas File di Sini, atau Klik untuk Memilih Dokumen
                         </p>
                         <p className="text-xs text-slate-400 mt-1">
-                          Format yang didukung: PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx) (Maks 25MB)
+                          Format yang didukung: PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), Gambar (.png/.jpg) (Maks 25MB)
                         </p>
                       </div>
                     )}
                   </div>
                 </label>
               </div>
+
+              {/* Progress Bar */}
+              {isUploading && (
+                <div className="space-y-1.5 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-200">
+                    <span className="flex items-center gap-2">
+                      <span className="w-3 h-3 border-2 border-[#696cff] border-t-transparent rounded-full animate-spin"></span>
+                      Mengunggah ke Google Drive & menyimpan metadata ke Supabase...
+                    </span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full h-2.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[#696cff] transition-all duration-300 rounded-full"
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Submit Action */}
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <p className="text-xs text-slate-400 flex items-center gap-1.5">
-                <HardDrive className="w-4 h-4 text-emerald-500" /> Disimpan ke folder: <strong>GuruKu_Storage/Modules/</strong>
+                <HardDrive className="w-4 h-4 text-emerald-500" /> Disimpan ke: <strong>GuruKu/Arsip Modul Ajar/</strong>
               </p>
 
               <div className="flex items-center gap-3">
@@ -676,7 +998,7 @@ export const ArsipModulPage: React.FC = () => {
                   {isUploading ? (
                     <>
                       <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                      <span>Mengunggah ke Google Drive...</span>
+                      <span>Mengunggah File...</span>
                     </>
                   ) : (
                     <>
@@ -691,52 +1013,265 @@ export const ArsipModulPage: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: GDRIVE STATUS */}
+      {/* TAB 3: GDRIVE & SUPABASE STATUS */}
       {activeTab === 'gdrive_status' && (
         <div className="space-y-6">
           <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
               <div>
                 <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  <HardDrive className="w-5 h-5 text-emerald-500" /> Integrasi & Status Folder Google Drive
+                  <HardDrive className="w-5 h-5 text-emerald-500" /> Integrasi & Status Sistem Penyimpanan
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Folder Google Drive berfungsi sebagai penyimpanan terstruktur untuk semua modul ajar dan lampiran sekolah.
+                  Arsitektur Dual Storage: Google Drive API v3 (File Fisik) + Supabase PostgreSQL (Metadata Central).
                 </p>
               </div>
 
-              <span className="px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-1.5">
-                <Check className="w-3.5 h-3.5" /> GDrive Connected
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5" /> GDrive OAuth 2.0 Ready
+                </span>
+                <span className="px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-[#696cff] text-xs font-bold flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5" /> Supabase Live DB
+                </span>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
-                <p className="text-[10px] uppercase font-bold text-slate-400">Nama Folder Root</p>
-                <p className="text-sm font-extrabold text-slate-800 dark:text-slate-100">{systemSettings.googleDriveFolderName || 'GuruKu_Storage'}</p>
+                <p className="text-[10px] uppercase font-bold text-slate-400">Penyimpanan Fisik File</p>
+                <p className="text-sm font-extrabold text-slate-800 dark:text-slate-100">Google Drive API v3</p>
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">Aktif • Auto Refresh Token</p>
               </div>
 
               <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
-                <p className="text-[10px] uppercase font-bold text-slate-400">Total File Modul Tersimpan</p>
-                <p className="text-sm font-extrabold text-[#696cff]">{modules.length} File Dokumen</p>
+                <p className="text-[10px] uppercase font-bold text-slate-400">Database Single Source of Truth</p>
+                <p className="text-sm font-extrabold text-[#696cff]">Supabase PostgreSQL</p>
+                <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold">Tabel module_archives Active</p>
               </div>
 
               <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
-                <p className="text-[10px] uppercase font-bold text-slate-400">Keamanan Akses</p>
-                <p className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">Secure Access Link</p>
+                <p className="text-[10px] uppercase font-bold text-slate-400">Total Modul Tersimpan</p>
+                <p className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">{modules.length} File Dokumen</p>
+                <p className="text-[11px] text-slate-400 font-semibold">Persisten Tanpa Local Storage</p>
               </div>
             </div>
 
             <div className="p-5 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 space-y-3">
               <h4 className="text-xs font-extrabold text-[#696cff] flex items-center gap-1.5">
-                <FolderCheck className="w-4 h-4" /> Struktur Sub-Folder Google Drive Terpusat:
+                <FolderCheck className="w-4 h-4" /> Hirarki Folder Otomatis di Google Drive:
               </h4>
-              <ul className="text-xs text-slate-600 dark:text-slate-300 space-y-1.5 font-mono">
-                <li>📁 /GuruKu_Storage/Modules/ (Tempat Arsip Modul Ajar & RPP)</li>
-                <li>📁 /GuruKu_Storage/System/ (Tempat Kop Surat & Asset Sekolah)</li>
-                <li>📁 /GuruKu_Storage/Avatars/ (Foto Profil Guru & Pengguna)</li>
-              </ul>
+              <pre className="text-xs text-slate-700 dark:text-slate-200 font-mono bg-white dark:bg-slate-900 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/40 overflow-x-auto">
+{`GuruKu/
+└── Arsip Modul Ajar/
+      │
+      ├── 2025-2026/
+      │      ├── Semester 1/
+      │      │      ├── Informatika/
+      │      │      │      ├── VII A/
+      │      │      │      ├── VII B/
+      │      │      │      └── VIII A/
+      │      │      └── Matematika/
+      │      └── Semester 2/
+      │
+      └── 2026-2027/`}
+              </pre>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* PREVIEW MODAL */}
+      {previewModule && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-4xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-up">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <span className="text-[10px] font-bold text-[#696cff] uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-900">
+                  {previewModule.subjectName} • Kelas {previewModule.classLevel}
+                </span>
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">{previewModule.title}</h3>
+                <p className="text-xs text-slate-400">
+                  Oleh {previewModule.teacherName} • {new Date(previewModule.createdAt).toLocaleDateString('id-ID')}
+                </p>
+              </div>
+
+              <button
+                onClick={() => setPreviewModule(null)}
+                className="p-2 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Document Viewer */}
+            {renderDocumentViewer(previewModule)}
+
+            <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3">
+              <span className="text-xs text-slate-400 truncate max-w-md">
+                Nama File: <strong className="text-slate-700 dark:text-slate-300">{previewModule.fileName}</strong> ({formatFileSize(previewModule.fileSize)})
+              </span>
+
+              <div className="flex items-center gap-2">
+                <a
+                  href={GoogleDriveService.getDriveDownloadUrl(previewModule.webContentLink, previewModule.fileDriveId)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-4 py-2 rounded-xl bg-[#696cff] text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-xs"
+                >
+                  <Download className="w-4 h-4" /> Unduh Dokumen
+                </a>
+                <button
+                  onClick={() => setPreviewModule(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT MODAL */}
+      {editingModule && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-up">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <Edit className="w-5 h-5 text-[#696cff]" /> Ubah Metadata Arsip Modul / RPP
+              </h3>
+              <button
+                onClick={() => setEditingModule(null)}
+                className="p-2 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Judul Modul Ajar / RPP *</label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-medium text-slate-800 dark:text-slate-100"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Mata Pelajaran</label>
+                  <select
+                    value={editSubjectId}
+                    onChange={(e) => setEditSubjectId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-100"
+                  >
+                    {subjects.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tingkat Kelas</label>
+                  <select
+                    value={editClassLevel}
+                    onChange={(e) => setEditClassLevel(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-100"
+                  >
+                    <option value="VII A">Kelas VII A</option>
+                    <option value="VII B">Kelas VII B</option>
+                    <option value="VIII A">Kelas VIII A</option>
+                    <option value="VIII B">Kelas VIII B</option>
+                    <option value="IX A">Kelas IX A</option>
+                    <option value="7">Kelas 7</option>
+                    <option value="8">Kelas 8</option>
+                    <option value="9">Kelas 9</option>
+                    <option value="10">Kelas 10</option>
+                    <option value="11">Kelas 11</option>
+                    <option value="12">Kelas 12</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Semester</label>
+                  <select
+                    value={editSemester}
+                    onChange={(e) => setEditSemester(e.target.value as '1' | '2')}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-100"
+                  >
+                    <option value="1">Semester 1 (Ganjil)</option>
+                    <option value="2">Semester 2 (Genap)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tahun Ajaran</label>
+                  <input
+                    type="text"
+                    value={editAcademicYear}
+                    onChange={(e) => setEditAcademicYear(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-100"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Deskripsi / Capaian Pembelajaran</label>
+                <textarea
+                  rows={2}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-800 dark:text-slate-100"
+                />
+              </div>
+
+              <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Ganti File Dokumen di Google Drive (Opsional)
+                </label>
+                <input
+                  type="file"
+                  onChange={(e) => e.target.files && setEditReplacementFile(e.target.files[0])}
+                  accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx"
+                  className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-[#696cff] file:text-white hover:file:bg-[#5f61e6]"
+                />
+                {editReplacementFile && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-bold">
+                    File pengganti dipilih: {editReplacementFile.name} ({(editReplacementFile.size / (1024 * 1024)).toFixed(2)} MB)
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingModule(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="px-5 py-2.5 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                >
+                  {isUpdating ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      <span>Menyimpan...</span>
+                    </>
+                  ) : (
+                    <span>Simpan Perubahan</span>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

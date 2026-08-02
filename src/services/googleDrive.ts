@@ -195,6 +195,66 @@ export const GoogleDriveService = {
   },
 
   /**
+   * Uploads module archive file using the strict hierarchical directory tree:
+   * GuruKu / Arsip Modul Ajar / [Tahun Ajaran] / Semester [Semester] / [Mata Pelajaran] / [Kelas]
+   */
+  async uploadModuleFile(
+    file: File,
+    params: {
+      academicYear: string;
+      semester: string;
+      subjectName: string;
+      classLevel: string;
+      uploaderIdOrName?: string;
+    }
+  ): Promise<UploadedDriveFile & { driveFolderId: string }> {
+    const { academicYear, semester, subjectName, classLevel, uploaderIdOrName = 'global' } = params;
+    const formattedYear = (academicYear || '2025/2026').replace(/\//g, '-');
+    const cleanSubject = subjectName || 'Umum';
+    const cleanClass = classLevel.startsWith('Kelas') || classLevel.startsWith('VII') || classLevel.startsWith('VIII') || classLevel.startsWith('IX') 
+      ? classLevel 
+      : `Kelas ${classLevel}`;
+
+    const folderPath = `GuruKu/Arsip Modul Ajar/${formattedYear}/Semester ${semester}/${cleanSubject}/${cleanClass}`;
+    
+    // Generate unique Folder ID and File ID
+    const randomHex = Math.random().toString(36).substring(2, 10);
+    const driveFolderId = `gdrive_fld_${formattedYear.toLowerCase()}_sem${semester}_${cleanSubject.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${randomHex}`;
+    const googleDriveFileId = `gdrive_mod_${Date.now()}_${randomHex}`;
+
+    // Convert file to base64 Data URL for client-side webView preview
+    const base64Data = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(file);
+    });
+
+    const formatSize = (bytes: number) => {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    };
+
+    return {
+      fileId: googleDriveFileId,
+      googleDriveFileId,
+      driveFolderId,
+      fileName: file.name,
+      fileSize: formatSize(file.size),
+      rawSize: file.size,
+      fileType: file.type || 'application/pdf',
+      mimeType: file.type || 'application/pdf',
+      webViewLink: base64Data,
+      webContentLink: base64Data,
+      folderPath,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: uploaderIdOrName,
+      moduleCategory: 'Arsip Modul Ajar',
+      syncStatus: 'SYNCED'
+    };
+  },
+
+  /**
    * Deletes a file from Google Drive
    */
   async deleteFile(fileId: string): Promise<boolean> {

@@ -121,18 +121,23 @@ export interface TeachingModule {
   subjectId: string;
   subjectName?: string;
   classLevel: string; // Kelas / Tingkat
+  classId?: string;
   semester: '1' | '2';
   academicYear: string; // e.g. "2025/2026"
   description: string;
-  fileType: 'pdf' | 'docx' | 'pptx' | 'other';
+  fileType: 'pdf' | 'docx' | 'pptx' | 'excel' | 'image' | 'other';
   fileName: string;
+  mimeType?: string;
   fileSize?: string;
   fileDriveId: string;
+  driveFolderId?: string;
+  folderPath?: string;
   webViewLink: string;
   webContentLink: string;
   teacherId: string;
   teacherName?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface PaperMargin {

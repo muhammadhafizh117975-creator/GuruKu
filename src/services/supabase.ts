@@ -485,7 +485,34 @@ CREATE TRIGGER set_teaching_journals_updated_at
   BEFORE UPDATE ON public.teaching_journals
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- 10. TABEL TEACHING_MODULES (ARSIP MODUL AJAR / RPP)
+-- 10. TABEL MODULE_ARCHIVES & TEACHING_MODULES (ARSIP MODUL AJAR / RPP)
+CREATE TABLE IF NOT EXISTS public.module_archives (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  title TEXT NOT NULL,
+  description TEXT,
+  subject_id TEXT REFERENCES public.subjects(id) ON DELETE CASCADE,
+  class_id TEXT,
+  class_level TEXT,
+  semester CHAR(1) CHECK (semester IN ('1', '2')),
+  academic_year TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  mime_type TEXT,
+  file_size TEXT,
+  drive_file_id TEXT NOT NULL,
+  drive_folder_id TEXT,
+  drive_url TEXT NOT NULL,
+  web_view_link TEXT,
+  web_content_link TEXT,
+  uploaded_by TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS set_module_archives_updated_at ON public.module_archives;
+CREATE TRIGGER set_module_archives_updated_at
+  BEFORE UPDATE ON public.module_archives
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
 CREATE TABLE IF NOT EXISTS public.teaching_modules (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   title TEXT NOT NULL,
