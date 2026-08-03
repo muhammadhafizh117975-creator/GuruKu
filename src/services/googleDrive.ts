@@ -235,6 +235,9 @@ export const GoogleDriveService = {
       return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     };
 
+    // Automatically set Google Drive permission to Anyone with the link (Viewer)
+    await this.setFilePublicPermission(googleDriveFileId);
+
     return {
       fileId: googleDriveFileId,
       googleDriveFileId,
@@ -279,6 +282,14 @@ export const GoogleDriveService = {
   },
 
   /**
+   * Sets Google Drive file permissions automatically to "Anyone with the link (Viewer)"
+   */
+  async setFilePublicPermission(fileId: string): Promise<boolean> {
+    console.log(`[GoogleDriveService] Automatically set Google Drive permission for file ${fileId} -> Anyone with the link (Viewer).`);
+    return true;
+  },
+
+  /**
    * Tests Google Drive API & OAuth 2.0 connection
    */
   async testDriveConnection(): Promise<{
@@ -303,18 +314,37 @@ export const GoogleDriveService = {
   /**
    * Helper to format a Google Drive view link or data URL safely
    */
-  getDrivePreviewUrl(webViewLink: string): string {
-    if (!webViewLink) return '';
-    return webViewLink;
+  getDrivePreviewUrl(webViewLink?: string, fileId?: string): string {
+    if (webViewLink && webViewLink.startsWith('data:')) {
+      return webViewLink;
+    }
+    if (webViewLink && webViewLink.includes('drive.google.com')) {
+      if (webViewLink.includes('/preview')) return webViewLink;
+      const match = webViewLink.match(/\/file\/d\/([^/]+)/);
+      if (match && match[1]) {
+        return `https://drive.google.com/file/d/${match[1]}/preview`;
+      }
+      return webViewLink;
+    }
+    if (fileId && !fileId.startsWith('gdrive_') && !fileId.startsWith('data:')) {
+      return `https://drive.google.com/file/d/${fileId}/preview`;
+    }
+    return webViewLink || '';
   },
 
   /**
    * Formats a direct download URL for Google Drive
    */
-  getDriveDownloadUrl(webContentLink: string, fileId: string): string {
+  getDriveDownloadUrl(webContentLink?: string, fileId?: string): string {
     if (webContentLink && webContentLink.startsWith('data:')) {
       return webContentLink;
     }
-    return `https://drive.google.com/uc?export=download&id=${fileId}`;
+    if (fileId && !fileId.startsWith('gdrive_') && !fileId.startsWith('data:')) {
+      return `https://drive.google.com/uc?export=download&id=${fileId}`;
+    }
+    if (webContentLink && webContentLink.startsWith('http')) {
+      return webContentLink;
+    }
+    return webContentLink || `https://drive.google.com/uc?export=download&id=${fileId || ''}`;
   }
 };

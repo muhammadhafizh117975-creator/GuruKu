@@ -1,9 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { AcademicYearItem, SchoolPrincipal } from '../../types';
 import { GoogleDriveService, GoogleDriveConfig, FolderStructureConfig, DEFAULT_FOLDER_STRUCTURE } from '../../services/googleDrive';
 import { generateSupabaseSQLScript, resetSupabaseClient, resetNeonClient, getSupabaseClient, getNeonSql, INITIAL_PROFILES, auditSupabaseDatabase, DatabaseAuditReport } from '../../services/supabase';
+import {
+  createFullBackupPayload,
+  fetchBackupHistoryRecords,
+  deleteBackupHistoryRecord,
+  triggerDownloadBackupFile,
+  validateBackupFileContent,
+  restoreFullBackupData,
+  BackupHistoryRecord,
+  FullBackupPayload
+} from '../../services/backupService';
 import { KopSuratPreview } from '../../components/common/KopSuratPreview';
 import { Modal } from '../../components/common/Modal';
 import { showConfirmModal, showSuccessToast, showErrorToast } from '../../components/common/SweetAlert';
@@ -43,11 +53,20 @@ import {
   Layers,
   Search,
   UserCheck,
-  User
+  User,
+  Download,
+  History,
+  FileJson,
+  FileCode,
+  AlertTriangle,
+  Clock,
+  HardDriveDownload,
+  HardDriveUpload,
+  Loader2
 } from 'lucide-react';
 
 interface PengaturanSistemPageProps {
-  defaultTab?: 'akademik' | 'dokumen' | 'sistem' | 'kepala-sekolah' | 'admin' | 'database';
+  defaultTab?: 'akademik' | 'dokumen' | 'sistem' | 'kepala-sekolah' | 'admin' | 'database' | 'backup';
 }
 
 export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defaultTab = 'akademik' }) => {
@@ -62,6 +81,15 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
     setActiveAcademicYear,
     deleteAcademicYear,
     teachers,
+    subjects,
+    classes,
+    students,
+    grades,
+    attendance,
+    journals,
+    modules,
+    notifications,
+    activityLogs,
     principals,
     activePrincipal,
     addPrincipal,
@@ -71,7 +99,7 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
     resetAllData
   } = useData();
 
-  const [activeTab, setActiveTab] = useState<'akademik' | 'dokumen' | 'sistem' | 'kepala-sekolah' | 'admin' | 'database'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'akademik' | 'dokumen' | 'sistem' | 'kepala-sekolah' | 'admin' | 'database' | 'backup'>(defaultTab);
 
   // Principal Management State
   const [principalSearch, setPrincipalSearch] = useState<string>('');
@@ -321,6 +349,150 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
   const [isCopied, setIsCopied] = useState<boolean>(false);
 
   const isAdmin = user?.role === 'admin';
+
+  // 5. Backup & Restore System State
+  const [backupHistory, setBackupHistory] = useState<BackupHistoryRecord[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
+  const [isCreatingBackup, setIsCreatingBackup] = useState<boolean>(false);
+  const [backupStep, setBackupStep] = useState<string>('');
+  const [backupProgressPct, setBackupProgressPct] = useState<number>(0);
+
+  // Download Format Modal State
+  const [isFormatModalOpen, setIsFormatModalOpen] = useState<boolean>(false);
+
+  // Restore Modal State
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState<boolean>(false);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [parsedRestorePayload, setParsedRestorePayload] = useState<FullBackupPayload | null>(null);
+  const [restoreValidationMsg, setRestoreValidationMsg] = useState<string>('');
+  const [isRestoring, setIsRestoring] = useState<boolean>(false);
+  const [restoreProgress, setRestoreProgress] = useState<{ step: string; pct: number; processed: number; total: number }>({
+    step: '',
+    pct: 0,
+    processed: 0,
+    total: 0
+  });
+
+  const loadBackupHistory = async () => {
+    setIsLoadingHistory(true);
+    try {
+      const records = await fetchBackupHistoryRecords();
+      setBackupHistory(records);
+    } catch (err) {
+      console.error('Failed loading backup history:', err);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'backup') {
+      loadBackupHistory();
+    }
+  }, [activeTab]);
+
+  // Execute Backup Handler
+  const handleExecuteBackup = async (format: 'JSON' | 'SQL' = 'JSON') => {
+    if (!user) return;
+    setIsCreatingBackup(true);
+    setBackupProgressPct(10);
+    setBackupStep('Menyiapkan proses pencadangan sistem...');
+
+    try {
+      const adminInfo = { id: user.id, fullName: user.fullName || 'Administrator' };
+      const dataState = {
+        profiles: INITIAL_PROFILES,
+        subjects: subjects || [],
+        classes: classes || [],
+        students: students || [],
+        schoolPrincipals: principals || [],
+        academicYears: academicYears || [],
+        grades: grades || [],
+        attendance: attendance || [],
+        teachingJournals: journals || [],
+        teachingModules: modules || [],
+        systemSettings,
+        notifications: notifications || [],
+        activityLogs: activityLogs || []
+      };
+
+      const payload = await createFullBackupPayload(adminInfo, dataState, (step, pct) => {
+        setBackupStep(step);
+        setBackupProgressPct(pct);
+      });
+
+      triggerDownloadBackupFile(payload, format);
+      showSuccessToast(`Backup Seluruh Data (${format}) Berhasil Dibuat & Diunduh!`);
+      setIsFormatModalOpen(false);
+      await loadBackupHistory();
+    } catch (err: any) {
+      showErrorToast('Gagal membuat backup sistem: ' + (err.message || err));
+    } finally {
+      setIsCreatingBackup(false);
+    }
+  };
+
+  // Handle Restore File Select
+  const handleFileSelectForRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setRestoreFile(file);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const result = validateBackupFileContent(text);
+      if (result.isValid && result.payload) {
+        setParsedRestorePayload(result.payload);
+        setRestoreValidationMsg(result.message);
+        setIsRestoreModalOpen(true);
+      } else {
+        showErrorToast(result.message);
+        setParsedRestorePayload(null);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // Execute Restore Handler
+  const handleConfirmRestore = async () => {
+    if (!parsedRestorePayload) return;
+    setIsRestoring(true);
+    try {
+      const res = await restoreFullBackupData(parsedRestorePayload, (step, pct, processed, total) => {
+        setRestoreProgress({ step, pct, processed, total });
+      });
+
+      if (res.success) {
+        showSuccessToast(res.message);
+        setIsRestoreModalOpen(false);
+        setRestoreFile(null);
+        setParsedRestorePayload(null);
+        setTimeout(() => {
+          window.location.reload();
+        }, 1200);
+      } else {
+        showErrorToast(res.message);
+      }
+    } catch (err: any) {
+      showErrorToast('Gagal memulihkan backup data: ' + (err.message || err));
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  // Delete Backup History Item
+  const handleDeleteBackupItem = async (id: string, name: string) => {
+    const confirm = await showConfirmModal(
+      'Hapus Riwayat Backup',
+      `Apakah Anda yakin ingin menghapus catatan backup "${name}"?`
+    );
+    if (confirm) {
+      await deleteBackupHistoryRecord(id);
+      showSuccessToast('Riwayat backup berhasil dihapus.');
+      await loadBackupHistory();
+    }
+  };
 
   // Academic Year Handlers
   const openCreateAyModal = () => {
@@ -642,6 +814,17 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
             }`}
           >
             <Database className="w-3.5 h-3.5" /> Database & Reset
+          </button>
+
+          <button
+            onClick={() => setActiveTab('backup')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'backup'
+                ? 'bg-[#696cff] text-white shadow-xs'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <HardDrive className="w-3.5 h-3.5" /> Backup & Restore Sistem
           </button>
         </div>
       </div>
@@ -2648,6 +2831,328 @@ export const PengaturanSistemPage: React.FC<PengaturanSistemPageProps> = ({ defa
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ------------------- TAB 7: BACKUP & RESTORE SISTEM ------------------- */}
+      {activeTab === 'backup' && (
+        <div className="space-y-8">
+          {/* RBAC check */}
+          {user?.role !== 'admin' && user?.role !== 'super_admin' ? (
+            <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 p-8 rounded-3xl text-center space-y-3">
+              <ShieldAlert className="w-12 h-12 text-amber-500 mx-auto" />
+              <h3 className="text-base font-bold text-amber-800 dark:text-amber-200">Akses Dibatasi</h3>
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                Fitur Backup & Restore Sistem hanya dapat diakses oleh Administrator Sekolah. Silakan hubungi tim IT Administrator.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Main Action Banner */}
+              <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div className="flex items-start gap-4">
+                    <div className="p-4 bg-[#696cff]/10 text-[#696cff] rounded-2xl shrink-0">
+                      <HardDrive className="w-8 h-8" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                        Pencadangan & Pemulihan Sistem (Backup & Restore)
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          Siap Digunakan
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-2xl">
+                        Cadangkan seluruh database dan metadata akademik (Master Guru, Siswa, Rombel, Nilai, Absensi, Jurnal, Modul Ajar, & Pengaturan Sistem) secara lengkap dalam format JSON / SQL.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-wrap items-center gap-3 shrink-0">
+                    <button
+                      onClick={() => setIsFormatModalOpen(true)}
+                      disabled={isCreatingBackup || isRestoring}
+                      className="px-5 py-3 rounded-2xl bg-[#696cff] hover:bg-[#5f62f1] disabled:opacity-50 text-white font-extrabold text-xs shadow-lg shadow-[#696cff]/25 transition-all flex items-center gap-2 cursor-pointer"
+                    >
+                      {isCreatingBackup ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" /> Membuat Backup...
+                        </>
+                      ) : (
+                        <>
+                          <HardDriveDownload className="w-4 h-4" /> Backup Seluruh Data
+                        </>
+                      )}
+                    </button>
+
+                    <label className="px-5 py-3 rounded-2xl bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer">
+                      <HardDriveUpload className="w-4 h-4" /> Restore Backup
+                      <input
+                        type="file"
+                        accept=".json,.sql"
+                        onChange={handleFileSelectForRestore}
+                        className="hidden"
+                        disabled={isCreatingBackup || isRestoring}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Progress Bar (Backup Creation or Restore in Progress) */}
+                {(isCreatingBackup || isRestoring) && (
+                  <div className="p-6 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3 animate-pulse">
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-200">
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 text-[#696cff] animate-spin" />
+                        {isCreatingBackup ? backupStep : restoreProgress.step}
+                      </span>
+                      <span className="text-[#696cff]">
+                        {isCreatingBackup ? `${backupProgressPct}%` : `${restoreProgress.pct}%`}
+                      </span>
+                    </div>
+                    <div className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-linear-to-r from-[#696cff] to-indigo-500 rounded-full transition-all duration-300"
+                        style={{
+                          width: `${isCreatingBackup ? backupProgressPct : restoreProgress.pct}%`
+                        }}
+                      />
+                    </div>
+                    {isRestoring && restoreProgress.total > 0 && (
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 text-right font-mono">
+                        Progress entri: {restoreProgress.processed} / {restoreProgress.total} item diproses
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* History Table */}
+              <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                      <History className="w-4 h-4 text-[#696cff]" /> Riwayat Pencadangan System (Backup Logs)
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Daftar catatan pencadangan yang berhasil disimpan di Supabase dan browser.
+                    </p>
+                  </div>
+                  <button
+                    onClick={loadBackupHistory}
+                    className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-all cursor-pointer"
+                    title="Refresh Riwayat"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isLoadingHistory ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+
+                {backupHistory.length === 0 ? (
+                  <div className="p-10 text-center space-y-3 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
+                    <Clock className="w-10 h-10 text-slate-400 mx-auto" />
+                    <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                      Belum ada catatan riwayat pencadangan data.
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Klik tombol "Backup Seluruh Data" di atas untuk membuat cadangan pertama Anda.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-2xl border border-slate-200/80 dark:border-slate-800">
+                    <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+                      <thead className="bg-slate-50 dark:bg-slate-800/70 text-slate-700 dark:text-slate-200 font-bold border-b border-slate-200 dark:border-slate-700">
+                        <tr>
+                          <th className="p-3.5">Nama Backup & File</th>
+                          <th className="p-3.5">Tanggal & Waktu</th>
+                          <th className="p-3.5">Ukuran</th>
+                          <th className="p-3.5">Dibuat Oleh</th>
+                          <th className="p-3.5">Status</th>
+                          <th className="p-3.5 text-right">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {backupHistory.map((item) => (
+                          <tr key={item.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-all">
+                            <td className="p-3.5 space-y-0.5">
+                              <div className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                                <FileJson className="w-4 h-4 text-[#696cff] shrink-0" />
+                                {item.name}
+                              </div>
+                              <div className="text-[11px] font-mono text-slate-400">{item.file_name}</div>
+                            </td>
+                            <td className="p-3.5 whitespace-nowrap text-slate-500 dark:text-slate-400">
+                              {new Date(item.created_at).toLocaleDateString('id-ID', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric'
+                              })}{' '}
+                              {new Date(item.created_at).toLocaleTimeString('id-ID', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </td>
+                            <td className="p-3.5 font-mono text-slate-600 dark:text-slate-300">{item.file_size}</td>
+                            <td className="p-3.5 font-medium text-slate-700 dark:text-slate-200">
+                              {item.created_by_name || 'Administrator'}
+                            </td>
+                            <td className="p-3.5">
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                {item.status || 'SELESAI'}
+                              </span>
+                            </td>
+                            <td className="p-3.5 text-right whitespace-nowrap space-x-1">
+                              <button
+                                onClick={() => handleDeleteBackupItem(item.id, item.name)}
+                                className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
+                                title="Hapus Riwayat"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Format Selection Modal */}
+          <Modal
+            isOpen={isFormatModalOpen}
+            onClose={() => setIsFormatModalOpen(false)}
+            title="Pilih Format Unduhan Backup"
+          >
+            <div className="space-y-6">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Pilih format pencadangan data yang sesuai dengan kebutuhan Anda. Kedua format berisi seluruh data aplikasi dan struktur database Supabase yang identik.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => handleExecuteBackup('JSON')}
+                  disabled={isCreatingBackup}
+                  className="p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-[#696cff] dark:hover:border-[#696cff] bg-slate-50/50 dark:bg-slate-800/50 hover:bg-[#696cff]/5 text-left transition-all group cursor-pointer space-y-3"
+                >
+                  <div className="p-3 bg-indigo-500/10 text-indigo-500 rounded-xl w-fit group-hover:bg-[#696cff] group-hover:text-white transition-all">
+                    <FileJson className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">Format JSON (.json)</h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                      Rekomendasi utama untuk Restore cepat langsung dari antarmuka aplikasi ini.
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleExecuteBackup('SQL')}
+                  disabled={isCreatingBackup}
+                  className="p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-[#696cff] dark:hover:border-[#696cff] bg-slate-50/50 dark:bg-slate-800/50 hover:bg-[#696cff]/5 text-left transition-all group cursor-pointer space-y-3"
+                >
+                  <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl w-fit group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                    <FileCode className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">Format SQL Script (.sql)</h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                      Format standar database berisi instruksi CREATE TABLE & INSERT statement untuk Supabase SQL Editor.
+                    </p>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </Modal>
+
+          {/* Restore Confirmation Modal */}
+          <Modal
+            isOpen={isRestoreModalOpen}
+            onClose={() => !isRestoring && setIsRestoreModalOpen(false)}
+            title="Konfirmasi Restore Data Aplikasi"
+          >
+            {parsedRestorePayload && (
+              <div className="space-y-6">
+                <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-2xl flex items-start gap-3 text-xs text-amber-800 dark:text-amber-300">
+                  <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="font-bold">Peringatan Pemulihan Data:</strong>
+                    <p className="mt-0.5">
+                      Proses restore akan menyinkronkan data aplikasi dengan data dari file pencadangan.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Metadata Details */}
+                <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Nama Backup:</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-100">{parsedRestorePayload.metadata.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Tanggal Pencadangan:</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-200">{parsedRestorePayload.metadata.backupDate}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Dibuat Oleh:</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-200">{parsedRestorePayload.metadata.createdByName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Versi Aplikasi & DB:</span>
+                    <span className="font-mono text-[#696cff]">{parsedRestorePayload.metadata.appVersion}</span>
+                  </div>
+                </div>
+
+                {/* Record Counts Breakdown */}
+                {parsedRestorePayload.metadata.recordCounts && (
+                  <div className="space-y-2">
+                    <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300">Rincian Data yang Akan Dipulihkan:</h5>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {Object.entries(parsedRestorePayload.metadata.recordCounts).map(([key, val]) => (
+                        <div key={key} className="p-2.5 bg-slate-100 dark:bg-slate-800/80 rounded-xl text-center">
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400">{key}</div>
+                          <div className="text-sm font-extrabold text-slate-800 dark:text-slate-100">{val}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Buttons */}
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setIsRestoreModalOpen(false)}
+                    disabled={isRestoring}
+                    className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer"
+                  >
+                    Batal
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleConfirmRestore}
+                    disabled={isRestoring}
+                    className="px-5 py-2.5 rounded-xl bg-[#696cff] hover:bg-[#5f62f1] disabled:opacity-50 text-white text-xs font-extrabold shadow-md shadow-[#696cff]/20 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    {isRestoring ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> Memulihkan Data...
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="w-4 h-4" /> Konfirmasi & Restore Data Sekarang
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </Modal>
         </div>
       )}
 

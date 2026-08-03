@@ -271,8 +271,30 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           gradeLevel: c.grade_level,
           academicYear: c.academic_year,
           homeroomTeacherId: c.homeroom_teacher_id,
+          teacherIds: c.teacher_ids || [],
           createdAt: c.created_at
         }));
+
+        try {
+          const { data: assignData } = await client.from('teacher_assignments').select('*');
+          if (assignData && assignData.length > 0) {
+            const classTeachersMap: Record<string, Set<string>> = {};
+            assignData.forEach((a: any) => {
+              if (a.is_active !== false && a.class_id && a.teacher_id) {
+                if (!classTeachersMap[a.class_id]) classTeachersMap[a.class_id] = new Set();
+                classTeachersMap[a.class_id].add(a.teacher_id);
+              }
+            });
+            fetchedClasses = fetchedClasses.map((c) => {
+              const extraIds = classTeachersMap[c.id] ? Array.from(classTeachersMap[c.id]) : [];
+              const combined = Array.from(new Set([...(c.teacherIds || []), ...extraIds]));
+              return { ...c, teacherIds: combined };
+            });
+          }
+        } catch (assignErr) {
+          console.warn('[Supabase DB Sync Notice] teacher_assignments table read:', assignErr);
+        }
+
         setClasses(fetchedClasses);
       } else if (clsErr) {
         console.warn('[Supabase DB Sync Error] Failed fetching classes:', clsErr);
@@ -1510,6 +1532,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const newModId = `mod_${Date.now()}`;
       console.log('[Supabase DB] Adding module archive:', mod.title);
 
+      const previewUrl = GoogleDriveService.getDrivePreviewUrl(mod.webViewLink, mod.fileDriveId);
+      const downloadUrl = GoogleDriveService.getDriveDownloadUrl(mod.webContentLink, mod.fileDriveId);
+
       const archivePayload = {
         id: newModId,
         title: mod.title,
@@ -1520,15 +1545,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         semester: mod.semester,
         academic_year: mod.academicYear,
         file_name: mod.fileName,
-        mime_type: mod.mimeType || mod.fileType || 'application/pdf',
+        mime_type: mod.mimeType || (mod.fileType === 'pdf' ? 'application/pdf' : 'application/octet-stream'),
         file_size: mod.fileSize || '',
+        google_drive_file_id: mod.fileDriveId,
         drive_file_id: mod.fileDriveId,
         drive_folder_id: mod.driveFolderId || '',
+        preview_url: previewUrl,
+        download_url: downloadUrl,
         drive_url: mod.webViewLink,
         web_view_link: mod.webViewLink,
         web_content_link: mod.webContentLink,
         uploaded_by: mod.teacherId || null,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
 
       // Primary insertion to module_archives
@@ -1596,14 +1625,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (updatedMod.fileName !== undefined) updatePayload.file_name = updatedMod.fileName;
       if (updatedMod.fileSize !== undefined) updatePayload.file_size = updatedMod.fileSize;
       if (updatedMod.fileDriveId !== undefined) {
+        updatePayload.google_drive_file_id = updatedMod.fileDriveId;
         updatePayload.drive_file_id = updatedMod.fileDriveId;
         updatePayload.file_drive_id = updatedMod.fileDriveId;
       }
       if (updatedMod.webViewLink !== undefined) {
+        updatePayload.preview_url = updatedMod.webViewLink;
         updatePayload.web_view_link = updatedMod.webViewLink;
         updatePayload.drive_url = updatedMod.webViewLink;
       }
-      if (updatedMod.webContentLink !== undefined) updatePayload.web_content_link = updatedMod.webContentLink;
+      if (updatedMod.webContentLink !== undefined) {
+        updatePayload.download_url = updatedMod.webContentLink;
+        updatePayload.web_content_link = updatedMod.webContentLink;
+      }
 
       await client.from('module_archives').update(updatePayload).eq('id', id);
       await client.from('teaching_modules').update(updatePayload).eq('id', id);
@@ -1814,7 +1848,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Assign Teacher to Subjects and Classes
+  // Assign Teacher to Subjects, Grade Levels, and Classes
   const assignTeacherToSubjectsAndClasses = async (
     teacherId: string,
     subjectIds: string[],
@@ -1842,16 +1876,85 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // 2. Update classes
       for (const cls of classes) {
+        let currentTeacherIds = cls.teacherIds || [];
         const isAssigned = classIds.includes(cls.id);
-        if (isAssigned && cls.homeroomTeacherId !== teacherId) {
-          await client.from('classes').update({ homeroom_teacher_id: teacherId }).eq('id', cls.id);
-        } else if (!isAssigned && cls.homeroomTeacherId === teacherId) {
-          await client.from('classes').update({ homeroom_teacher_id: null }).eq('id', cls.id);
+        if (isAssigned) {
+          if (!currentTeacherIds.includes(teacherId)) {
+            const nextTeacherIds = [...currentTeacherIds, teacherId];
+            await client.from('classes').update({ teacher_ids: nextTeacherIds }).eq('id', cls.id);
+          }
+        } else {
+          if (currentTeacherIds.includes(teacherId)) {
+            const nextTeacherIds = currentTeacherIds.filter((id) => id !== teacherId);
+            await client.from('classes').update({ teacher_ids: nextTeacherIds }).eq('id', cls.id);
+          }
+          if (cls.homeroomTeacherId === teacherId) {
+            await client.from('classes').update({ homeroom_teacher_id: null }).eq('id', cls.id);
+          }
         }
       }
 
+      // 3. Sync teacher_assignments table
+      try {
+        await client.from('teacher_assignments').delete().eq('teacher_id', teacherId);
+
+        const newAssignments: any[] = [];
+        const currentYear = activeAcademicYear?.year || '2025/2026';
+        const currentSemester = activeAcademicYear?.semester || '1';
+
+        if (classIds.length > 0 || subjectIds.length > 0) {
+          if (classIds.length > 0 && subjectIds.length > 0) {
+            for (const cId of classIds) {
+              const classObj = classes.find((c) => c.id === cId);
+              for (const sId of subjectIds) {
+                newAssignments.push({
+                  teacher_id: teacherId,
+                  subject_id: sId,
+                  class_id: cId,
+                  grade_level: classObj?.gradeLevel || null,
+                  academic_year: currentYear,
+                  semester: currentSemester,
+                  is_active: true
+                });
+              }
+            }
+          } else if (classIds.length > 0) {
+            for (const cId of classIds) {
+              const classObj = classes.find((c) => c.id === cId);
+              newAssignments.push({
+                teacher_id: teacherId,
+                subject_id: null,
+                class_id: cId,
+                grade_level: classObj?.gradeLevel || null,
+                academic_year: currentYear,
+                semester: currentSemester,
+                is_active: true
+              });
+            }
+          } else {
+            for (const sId of subjectIds) {
+              newAssignments.push({
+                teacher_id: teacherId,
+                subject_id: sId,
+                class_id: null,
+                grade_level: null,
+                academic_year: currentYear,
+                semester: currentSemester,
+                is_active: true
+              });
+            }
+          }
+
+          if (newAssignments.length > 0) {
+            await client.from('teacher_assignments').insert(newAssignments);
+          }
+        }
+      } catch (assignErr) {
+        console.warn('Sync teacher_assignments table notice:', assignErr);
+      }
+
       await loadDataFromSupabase();
-      logActivity('PENUGASAN_GURU', `Memperbarui penugasan mata pelajaran dan kelas untuk guru`);
+      logActivity('PENUGASAN_GURU', `Memperbarui penugasan mata pelajaran, tingkat, dan kelas untuk guru`);
       showSuccessToast('Penugasan guru berhasil disimpan.');
     } catch (err: any) {
       console.error('Failed assignTeacherToSubjectsAndClasses:', err);
@@ -1891,7 +1994,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const assignedSubjectIds = new Set(assignedSubjects.map((s) => s.id));
 
   const assignedClasses = isGuru
-    ? classes.filter((c) => c.homeroomTeacherId === user?.id)
+    ? classes.filter((c) => c.homeroomTeacherId === user?.id || c.teacherIds?.includes(user?.id || ''))
     : classes;
   const assignedClassIds = new Set(assignedClasses.map((c) => c.id));
 

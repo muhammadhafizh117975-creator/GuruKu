@@ -39,7 +39,21 @@ export interface ClassRoom {
   gradeLevel: string; // e.g., "7", "8", "9", "10", "11", "12"
   academicYear: string; // e.g., "2025/2026"
   homeroomTeacherId?: string;
+  teacherIds?: string[];
   createdAt: string;
+}
+
+export interface TeacherAssignment {
+  id: string;
+  teacherId: string;
+  subjectId?: string;
+  gradeLevel?: string;
+  classId?: string;
+  academicYear?: string;
+  semester?: '1' | '2';
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Student {
@@ -49,7 +63,9 @@ export interface Student {
   gender: 'L' | 'P'; // Laki-laki / Perempuan
   birthPlace?: string;
   birthDate?: string;
+  religion?: string;
   address?: string;
+  parentName?: string;
   parentPhone?: string;
   classId: string;
   className?: string;

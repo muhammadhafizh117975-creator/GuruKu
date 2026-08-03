@@ -230,10 +230,12 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
                   <span className="font-semibold text-slate-500">Tingkat:</span>{' '}
                   <strong className="text-slate-800">{meta.gradeLevel || 'Semua Tingkat'}</strong>
                 </div>
-                <div>
-                  <span className="font-semibold text-slate-500">Guru Pengajar:</span>{' '}
-                  <strong className="text-slate-800">{teacherName}</strong>
-                </div>
+                {!isAdmin && (
+                  <div>
+                    <span className="font-semibold text-slate-500">Guru Pengajar:</span>{' '}
+                    <strong className="text-slate-800">{teacherName}</strong>
+                  </div>
+                )}
                 <div>
                   <span className="font-semibold text-slate-500">Tanggal Cetak:</span>{' '}
                   <strong className="text-slate-800">{currentDateStr}</strong>

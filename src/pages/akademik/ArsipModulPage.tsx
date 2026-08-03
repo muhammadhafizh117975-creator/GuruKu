@@ -31,8 +31,179 @@ import {
   Calendar,
   UserCheck,
   Layers,
-  BookOpen
+  BookOpen,
+  Database
 } from 'lucide-react';
+
+// PDF & Document Pratinjau Component
+const PdfPreviewViewer: React.FC<{ mod: TeachingModule }> = ({ mod }) => {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const isPdf =
+    mod.fileType === 'pdf' ||
+    mod.mimeType?.toLowerCase().includes('pdf') ||
+    mod.fileName.toLowerCase().endsWith('.pdf') ||
+    (mod.webViewLink && mod.webViewLink.startsWith('data:application/pdf'));
+
+  const isImage =
+    mod.fileType === 'image' ||
+    Boolean(mod.fileName.match(/\.(png|jpg|jpeg|webp)$/i)) ||
+    (mod.mimeType && mod.mimeType.startsWith('image/'));
+
+  useEffect(() => {
+    setIsLoading(true);
+    setLoadError(false);
+    let createdUrl: string | null = null;
+
+    if (mod.webViewLink && mod.webViewLink.startsWith('data:')) {
+      try {
+        const parts = mod.webViewLink.split(',');
+        const mimeMatch = parts[0].match(/:(.*?);/);
+        const mime = mimeMatch ? mimeMatch[1] : 'application/pdf';
+        const bstr = atob(parts[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        createdUrl = URL.createObjectURL(blob);
+        setBlobUrl(createdUrl);
+      } catch (err) {
+        console.error('Failed to convert base64 data to Blob:', err);
+        setLoadError(true);
+      }
+      setIsLoading(false);
+    } else {
+      setIsLoading(false);
+    }
+
+    return () => {
+      if (createdUrl) {
+        URL.revokeObjectURL(createdUrl);
+      }
+    };
+  }, [mod.webViewLink, mod.fileDriveId]);
+
+  if (isImage) {
+    const imgSrc = blobUrl || mod.webViewLink || mod.webContentLink;
+    return (
+      <div className="flex flex-col items-center justify-center p-6 bg-slate-900 rounded-2xl min-h-[400px]">
+        <img src={imgSrc} alt={mod.title} className="max-h-[550px] object-contain rounded-xl shadow-2xl" />
+      </div>
+    );
+  }
+
+  // Construct Direct Native PDF Stream URL
+  let directPdfUrl = '';
+  if (blobUrl) {
+    directPdfUrl = blobUrl;
+  } else if (mod.fileDriveId && !mod.fileDriveId.startsWith('data:') && !mod.fileDriveId.startsWith('gdrive_mod_')) {
+    directPdfUrl = `https://drive.google.com/uc?export=download&id=${mod.fileDriveId}`;
+  } else if (mod.webContentLink && mod.webContentLink.startsWith('http')) {
+    directPdfUrl = mod.webContentLink;
+  } else if (mod.webViewLink && mod.webViewLink.startsWith('http')) {
+    directPdfUrl = mod.webViewLink;
+  }
+
+  // Append toolbar parameters for native browser PDF plugin
+  const nativePdfSrc = directPdfUrl ? `${directPdfUrl}#toolbar=1&navpanes=1&scrollbar=1` : '';
+
+  const externalOpenUrl =
+    mod.webViewLink && mod.webViewLink.startsWith('http')
+      ? mod.webViewLink
+      : mod.fileDriveId && !mod.fileDriveId.startsWith('gdrive_')
+      ? `https://drive.google.com/file/d/${mod.fileDriveId}/view?usp=sharing`
+      : directPdfUrl || GoogleDriveService.getDriveDownloadUrl(mod.webContentLink, mod.fileDriveId);
+
+  return (
+    <div className="w-full h-[75vh] min-h-[500px] bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 relative flex flex-col">
+      <div className="bg-slate-800 px-4 py-2.5 flex items-center justify-between border-b border-slate-700/80 text-white text-xs">
+        <div className="flex items-center gap-2">
+          <FileText className="w-4 h-4 text-emerald-400" />
+          <span className="font-bold text-slate-200">Pratinjau Dokumen PDF</span>
+          <span className="bg-emerald-500/20 text-emerald-300 font-extrabold px-2.5 py-0.5 rounded-full text-[10px] border border-emerald-500/30 flex items-center gap-1">
+            <Database className="w-3 h-3 text-emerald-400" /> Supabase Storage
+          </span>
+          {isPdf && <span className="bg-rose-500/20 text-rose-300 font-extrabold px-2 py-0.5 rounded text-[10px]">PDF</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          {externalOpenUrl && externalOpenUrl.startsWith('http') && (
+            <a
+              href={externalOpenUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-indigo-300 hover:text-indigo-200 flex items-center gap-1.5 text-[11px] font-semibold bg-slate-700/80 hover:bg-slate-700 px-3 py-1 rounded-lg transition-colors"
+            >
+              <ExternalLink className="w-3.5 h-3.5" /> Buka PDF di Tab Baru
+            </a>
+          )}
+        </div>
+      </div>
+
+      <div className="flex-1 relative bg-slate-950 overflow-hidden">
+        {isLoading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/90 text-white gap-3 z-10">
+            <RefreshCw className="w-8 h-8 text-[#696cff] animate-spin" />
+            <p className="text-xs font-semibold">Memuat Pratinjau Dokumen PDF...</p>
+          </div>
+        )}
+
+        {loadError || !nativePdfSrc ? (
+          <div className="h-full flex flex-col items-center justify-center p-8 text-center text-slate-300 space-y-4">
+            <div className="p-5 bg-amber-500/10 text-amber-300 rounded-2xl border border-amber-500/20 max-w-lg space-y-2">
+              <AlertCircle className="w-8 h-8 mx-auto text-amber-400" />
+              <p className="text-sm font-bold text-amber-200">Browser tidak mendukung pratinjau PDF.</p>
+              <p className="text-xs text-slate-300">
+                Silakan buka PDF di tab baru atau unduh langsung file dokumen ke perangkat Anda.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {externalOpenUrl && externalOpenUrl.startsWith('http') && (
+                <a
+                  href={externalOpenUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-4 py-2 bg-[#696cff] hover:bg-[#5f61e6] text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" /> Buka PDF di Tab Baru
+                </a>
+              )}
+              <a
+                href={GoogleDriveService.getDriveDownloadUrl(mod.webContentLink, mod.fileDriveId)}
+                target="_blank"
+                rel="noreferrer"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center gap-2 transition-colors"
+              >
+                <Download className="w-4 h-4" /> Download PDF
+              </a>
+            </div>
+          </div>
+        ) : (
+          <object
+            data={nativePdfSrc}
+            type="application/pdf"
+            className="w-full h-full border-0"
+            onError={() => setLoadError(true)}
+          >
+            <embed
+              src={nativePdfSrc}
+              type="application/pdf"
+              className="w-full h-full border-0"
+            />
+            <iframe
+              src={nativePdfSrc}
+              title={mod.title}
+              className="w-full h-full border-0"
+            />
+          </object>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export const ArsipModulPage: React.FC = () => {
   const { user } = useAuth();
@@ -351,30 +522,7 @@ export const ArsipModulPage: React.FC = () => {
 
   // Preview Document Render Helper
   const renderDocumentViewer = (mod: TeachingModule) => {
-    const isImage = mod.fileType === 'image' || mod.fileName.match(/\.(png|jpg|jpeg|webp)$/i);
-    const driveUrl = mod.webViewLink || mod.webContentLink;
-
-    if (isImage) {
-      return (
-        <div className="flex flex-col items-center justify-center p-6 bg-slate-900 rounded-2xl min-h-[350px]">
-          <img src={driveUrl} alt={mod.title} className="max-h-[500px] object-contain rounded-xl shadow-2xl" />
-        </div>
-      );
-    }
-
-    // Google Drive / Google Docs Viewer Iframe
-    return (
-      <div className="w-full h-[550px] bg-slate-100 dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 relative">
-        <iframe
-          src={driveUrl && driveUrl.startsWith('data:') ? driveUrl : `https://docs.google.com/viewer?url=${encodeURIComponent(driveUrl)}&embedded=true`}
-          title={mod.title}
-          className="w-full h-full border-0"
-        />
-        <div className="absolute top-3 right-3 bg-slate-900/80 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
-          <HardDrive className="w-3 h-3 text-emerald-400" /> Embedded Preview
-        </div>
-      </div>
-    );
+    return <PdfPreviewViewer mod={mod} />;
   };
 
   return (
@@ -1084,21 +1232,28 @@ export const ArsipModulPage: React.FC = () => {
       {/* PREVIEW MODAL */}
       {previewModule && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-4xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-up">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-5xl w-full p-6 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl animate-scale-up">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div>
-                <span className="text-[10px] font-bold text-[#696cff] uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-900">
-                  {previewModule.subjectName} • Kelas {previewModule.classLevel}
-                </span>
-                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">{previewModule.title}</h3>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-bold text-[#696cff] uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-900">
+                    {previewModule.subjectName} • Kelas {previewModule.classLevel}
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-900 flex items-center gap-1">
+                    <Database className="w-3 h-3 text-emerald-500" /> Supabase Storage
+                  </span>
+                </div>
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mt-1">
+                  <FileText className="w-5 h-5 text-[#696cff]" /> {previewModule.title}
+                </h3>
                 <p className="text-xs text-slate-400">
-                  Oleh {previewModule.teacherName} • {new Date(previewModule.createdAt).toLocaleDateString('id-ID')}
+                  Oleh <strong className="text-slate-600 dark:text-slate-300">{previewModule.teacherName}</strong> • {new Date(previewModule.createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}
                 </p>
               </div>
 
               <button
                 onClick={() => setPreviewModule(null)}
-                className="p-2 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                className="p-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1117,13 +1272,13 @@ export const ArsipModulPage: React.FC = () => {
                   href={GoogleDriveService.getDriveDownloadUrl(previewModule.webContentLink, previewModule.fileDriveId)}
                   target="_blank"
                   rel="noreferrer"
-                  className="px-4 py-2 rounded-xl bg-[#696cff] text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-xs"
+                  className="px-4 py-2 rounded-xl bg-[#696cff] hover:bg-[#5f61e6] text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-xs transition-colors"
                 >
                   <Download className="w-4 h-4" /> Unduh Dokumen
                 </a>
                 <button
                   onClick={() => setPreviewModule(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold"
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                 >
                   Tutup
                 </button>

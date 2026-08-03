@@ -79,6 +79,22 @@ export const GuruPage: React.FC = () => {
   const [assigningTeacher, setAssigningTeacher] = useState<Profile | null>(null);
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+  const [selectedGradeLevels, setSelectedGradeLevels] = useState<string[]>([]);
+
+  // Dynamic Grade Levels extraction from Data Master Kelas
+  const availableGradeLevels = (Array.from(
+    new Set(classes.map((c) => c.gradeLevel).filter((gl): gl is string => Boolean(gl)))
+  ) as string[]).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  const formatGradeLevelLabel = (gl: string) => {
+    if (gl === '7' || gl.toUpperCase() === 'VII') return 'Kelas VII';
+    if (gl === '8' || gl.toUpperCase() === 'VIII') return 'Kelas VIII';
+    if (gl === '9' || gl.toUpperCase() === 'IX') return 'Kelas IX';
+    if (gl === '10' || gl.toUpperCase() === 'X') return 'Kelas X';
+    if (gl === '11' || gl.toUpperCase() === 'XI') return 'Kelas XI';
+    if (gl === '12' || gl.toUpperCase() === 'XII') return 'Kelas XII';
+    return `Tingkat ${gl}`;
+  };
 
   // View Credentials Modal State
   const [viewingCredentialsTeacher, setViewingCredentialsTeacher] = useState<Profile | null>(null);
@@ -200,9 +216,14 @@ Password: ${createdGuruInfo.password}`;
   const handleOpenAssignModal = (teacher: Profile) => {
     setAssigningTeacher(teacher);
     const currSubjIds = subjects.filter((s) => s.teacherIds?.includes(teacher.id)).map((s) => s.id);
-    const currClassIds = classes.filter((c) => c.homeroomTeacherId === teacher.id).map((c) => c.id);
+    const currClassIds = classes.filter((c) => c.homeroomTeacherId === teacher.id || c.teacherIds?.includes(teacher.id)).map((c) => c.id);
+    
+    const assignedClassObjs = classes.filter((c) => currClassIds.includes(c.id));
+    const initialGradeLevels = Array.from(new Set(assignedClassObjs.map((c) => c.gradeLevel)));
+
     setSelectedSubjectIds(currSubjIds);
     setSelectedClassIds(currClassIds);
+    setSelectedGradeLevels(initialGradeLevels);
   };
 
   const handleSaveAssignments = async (e: React.FormEvent) => {
@@ -532,7 +553,7 @@ Password: ${createdGuruInfo.password}`;
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredTeachers.map((teacher) => {
           const assignedMapel = subjects.filter((s) => s.teacherIds?.includes(teacher.id));
-          const assignedKelas = classes.filter((c) => c.homeroomTeacherId === teacher.id);
+          const assignedKelas = classes.filter((c) => c.homeroomTeacherId === teacher.id || c.teacherIds?.includes(teacher.id));
 
           return (
             <div
@@ -587,7 +608,9 @@ Password: ${createdGuruInfo.password}`;
                     <Users className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
                     <div className="flex flex-wrap gap-1">
                       {assignedKelas.length === 0 ? (
-                        <span className="text-[10px] text-slate-400">Belum diampu kelas</span>
+                        <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold px-2 py-0.5 rounded-full border border-amber-200/50 dark:border-amber-800/50">
+                          Belum diampu kelas.
+                        </span>
                       ) : (
                         assignedKelas.map((c) => (
                           <span key={c.id} className="text-[10px] bg-emerald-500/10 text-emerald-600 font-semibold px-2 py-0.5 rounded-full">
@@ -1072,9 +1095,9 @@ Password: ${createdGuruInfo.password}`;
             {/* Select Subjects */}
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
-                Mata Pelajaran yang Diampu
+                1. Mata Pelajaran yang Diampu
               </label>
-              <div className="max-h-40 overflow-y-auto space-y-1.5 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+              <div className="max-h-36 overflow-y-auto space-y-1.5 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
                 {subjects.length === 0 ? (
                   <p className="text-xs text-slate-400">Belum ada data mata pelajaran.</p>
                 ) : (
@@ -1105,36 +1128,190 @@ Password: ${createdGuruInfo.password}`;
               </div>
             </div>
 
-            {/* Select Classes */}
+            {/* 2. Penugasan Tingkat Kelas Multi-Select */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
-                Kelas / Rombongan Belajar yang Diampu
-              </label>
-              <div className="max-h-40 overflow-y-auto space-y-1.5 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                {classes.length === 0 ? (
-                  <p className="text-xs text-slate-400">Belum ada data kelas.</p>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  2. Penugasan Tingkat Kelas (Multi-Select)
+                </label>
+                {availableGradeLevels.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedGradeLevels.length === availableGradeLevels.length) {
+                        setSelectedGradeLevels([]);
+                        setSelectedClassIds([]);
+                      } else {
+                        setSelectedGradeLevels([...availableGradeLevels]);
+                        const allClsIds = classes.map((c) => c.id);
+                        setSelectedClassIds(allClsIds);
+                      }
+                    }}
+                    className="text-[11px] font-bold text-[#696cff] hover:underline cursor-pointer"
+                  >
+                    {selectedGradeLevels.length === availableGradeLevels.length
+                      ? 'Hapus Semua Tingkat'
+                      : 'Pilih Semua Tingkat'}
+                  </button>
+                )}
+              </div>
+
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
+                {availableGradeLevels.length === 0 ? (
+                  <p className="text-xs text-slate-400">Belum ada data tingkat di Data Master Kelas.</p>
                 ) : (
-                  classes.map((c) => {
-                    const isChecked = selectedClassIds.includes(c.id);
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {availableGradeLevels.map((gl) => {
+                      const isGlChecked = selectedGradeLevels.includes(gl);
+                      return (
+                        <label
+                          key={gl}
+                          className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer text-xs font-semibold ${
+                            isGlChecked
+                              ? 'bg-indigo-50/80 border-indigo-300 dark:bg-indigo-950/50 dark:border-indigo-700 text-indigo-900 dark:text-indigo-200 shadow-xs'
+                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isGlChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedGradeLevels([...selectedGradeLevels, gl]);
+                                const classesInGl = classes.filter((c) => c.gradeLevel === gl).map((c) => c.id);
+                                setSelectedClassIds(Array.from(new Set([...selectedClassIds, ...classesInGl])));
+                              } else {
+                                setSelectedGradeLevels(selectedGradeLevels.filter((g) => g !== gl));
+                                const classesInGl = classes.filter((c) => c.gradeLevel === gl).map((c) => c.id);
+                                setSelectedClassIds(selectedClassIds.filter((id) => !classesInGl.includes(id)));
+                              }
+                            }}
+                            className="w-4 h-4 rounded text-[#696cff] focus:ring-[#696cff]"
+                          />
+                          <span>{formatGradeLevelLabel(gl)}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 3. Relasi Tingkat dengan Kelas */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  3. Kelas yang Diampu (Berdasarkan Tingkat Terpilih)
+                </label>
+                {selectedGradeLevels.length > 0 && (
+                  <span className="text-[10px] font-medium text-slate-500">
+                    Tingkat terpilih: {selectedGradeLevels.map((gl) => formatGradeLevelLabel(gl)).join(', ')}
+                  </span>
+                )}
+              </div>
+
+              {selectedGradeLevels.length > 0 && (
+                selectedClassIds.length === 0 ? (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl mb-3 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-extrabold text-amber-800 dark:text-amber-200 block">Status Penugasan Kelas:</span>
+                      <span className="text-amber-700 dark:text-amber-300 font-semibold italic">Belum diampu kelas.</span>
+                    </div>
+                    <span className="text-[10px] bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100 font-bold px-2.5 py-1 rounded-lg">
+                      Centang Kelas di Bawah
+                    </span>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl mb-3 text-xs">
+                    <span className="font-extrabold text-emerald-800 dark:text-emerald-200 block mb-1">
+                      Kelas yang Diampu ({selectedClassIds.length} Kelas):
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedClassIds.map((cId) => {
+                        const clsObj = classes.find((c) => c.id === cId);
+                        return (
+                          <span key={cId} className="text-[11px] bg-emerald-200/80 dark:bg-emerald-900/80 text-emerald-900 dark:text-emerald-100 font-bold px-2 py-0.5 rounded-md">
+                            Kelas {clsObj?.name || cId}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )
+              )}
+
+              <div className="max-h-56 overflow-y-auto space-y-3 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                {selectedGradeLevels.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-amber-700 dark:text-amber-300 bg-amber-50/80 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-800">
+                    <AlertCircle className="w-5 h-5 text-amber-500 mx-auto mb-1" />
+                    <p className="font-bold">Pilih Minimal Satu Tingkat Kelas</p>
+                    <p className="text-[11px] opacity-80 mt-0.5">
+                      Daftar kelas akan otomatis ditampilkan sesuai tingkat yang Anda centang di atas (misal VII, VIII, IX).
+                    </p>
+                  </div>
+                ) : (
+                  selectedGradeLevels.map((gl) => {
+                    const classesInGl = classes.filter((c) => c.gradeLevel === gl);
+                    const allInGlSelected = classesInGl.length > 0 && classesInGl.every((c) => selectedClassIds.includes(c.id));
+
                     return (
-                      <label
-                        key={c.id}
-                        className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors cursor-pointer text-xs font-medium text-slate-700 dark:text-slate-200"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedClassIds([...selectedClassIds, c.id]);
-                            } else {
-                              setSelectedClassIds(selectedClassIds.filter((id) => id !== c.id));
-                            }
-                          }}
-                          className="w-4 h-4 rounded-md text-[#696cff] focus:ring-[#696cff]"
-                        />
-                        <span><strong>Kelas {c.name}</strong> (Tingkat {c.gradeLevel} - {c.academicYear})</span>
-                      </label>
+                      <div key={gl} className="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-2">
+                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-slate-700/60">
+                          <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400">
+                            {formatGradeLevelLabel(gl)} ({classesInGl.length} Kelas Available)
+                          </span>
+                          {classesInGl.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const glClassIds = classesInGl.map((c) => c.id);
+                                if (allInGlSelected) {
+                                  setSelectedClassIds(selectedClassIds.filter((id) => !glClassIds.includes(id)));
+                                } else {
+                                  setSelectedClassIds(Array.from(new Set([...selectedClassIds, ...glClassIds])));
+                                }
+                              }}
+                              className="text-[10px] font-bold text-[#696cff] hover:underline cursor-pointer"
+                            >
+                              {allInGlSelected ? 'Batal Pilih Semua' : 'Pilih Semua Kelas Ini'}
+                            </button>
+                          )}
+                        </div>
+
+                        {classesInGl.length === 0 ? (
+                          <p className="text-[11px] text-slate-400 italic">Tidak ada data kelas untuk {formatGradeLevelLabel(gl)}.</p>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                            {classesInGl.map((c) => {
+                              const isChecked = selectedClassIds.includes(c.id);
+                              return (
+                                <label
+                                  key={c.id}
+                                  className={`flex items-center gap-2 p-2 rounded-lg border transition-colors cursor-pointer text-xs font-medium ${
+                                    isChecked
+                                      ? 'bg-emerald-50/80 border-emerald-300 dark:bg-emerald-950/40 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 font-bold'
+                                      : 'bg-slate-50 dark:bg-slate-900/50 border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedClassIds([...selectedClassIds, c.id]);
+                                      } else {
+                                        setSelectedClassIds(selectedClassIds.filter((id) => id !== c.id));
+                                      }
+                                    }}
+                                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                                  />
+                                  <span>Kelas {c.name} <span className="text-[10px] opacity-60">({c.academicYear})</span></span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     );
                   })
                 )}

@@ -340,11 +340,13 @@ CREATE TABLE IF NOT EXISTS public.classes (
   grade_level TEXT NOT NULL,
   academic_year TEXT NOT NULL,
   homeroom_teacher_id TEXT REFERENCES public.profiles(id) ON DELETE SET NULL,
+  teacher_ids TEXT[] DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 ALTER TABLE public.classes ADD COLUMN IF NOT EXISTS homeroom_teacher_id TEXT;
+ALTER TABLE public.classes ADD COLUMN IF NOT EXISTS teacher_ids TEXT[] DEFAULT '{}';
 ALTER TABLE public.classes ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE public.classes ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
@@ -352,6 +354,41 @@ DROP TRIGGER IF EXISTS set_classes_updated_at ON public.classes;
 CREATE TRIGGER set_classes_updated_at
   BEFORE UPDATE ON public.classes
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- 5.1 TABEL TEACHER_ASSIGNMENTS (RELASI MANY-TO-MANY PENUGASAN GURU, MAPEL, TINGKAT & KELAS)
+CREATE TABLE IF NOT EXISTS public.teacher_assignments (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  teacher_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  subject_id TEXT REFERENCES public.subjects(id) ON DELETE CASCADE,
+  grade_level TEXT,
+  class_id TEXT REFERENCES public.classes(id) ON DELETE CASCADE,
+  academic_year TEXT DEFAULT '2025/2026',
+  semester CHAR(1) DEFAULT '1' CHECK (semester IN ('1', '2')),
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.teacher_assignments ADD COLUMN IF NOT EXISTS grade_level TEXT;
+ALTER TABLE public.teacher_assignments ADD COLUMN IF NOT EXISTS academic_year TEXT DEFAULT '2025/2026';
+ALTER TABLE public.teacher_assignments ADD COLUMN IF NOT EXISTS semester CHAR(1) DEFAULT '1';
+ALTER TABLE public.teacher_assignments ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+ALTER TABLE public.teacher_assignments ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.teacher_assignments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+DROP TRIGGER IF EXISTS set_teacher_assignments_updated_at ON public.teacher_assignments;
+CREATE TRIGGER set_teacher_assignments_updated_at
+  BEFORE UPDATE ON public.teacher_assignments
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+CREATE INDEX IF NOT EXISTS idx_teacher_assignments_teacher_id ON public.teacher_assignments(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_assignments_class_id ON public.teacher_assignments(class_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_assignments_subject_id ON public.teacher_assignments(subject_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_assignments_grade_level ON public.teacher_assignments(grade_level);
+
+ALTER TABLE public.teacher_assignments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow full access on teacher_assignments" ON public.teacher_assignments;
+CREATE POLICY "Allow full access on teacher_assignments" ON public.teacher_assignments FOR ALL USING (true) WITH CHECK (true);
 
 -- 6. TABEL STUDENTS (DATA SISWA & NIS)
 CREATE TABLE IF NOT EXISTS public.students (
@@ -510,15 +547,29 @@ CREATE TABLE IF NOT EXISTS public.module_archives (
   file_name TEXT NOT NULL,
   mime_type TEXT,
   file_size TEXT,
-  drive_file_id TEXT NOT NULL,
+  google_drive_file_id TEXT,
+  drive_file_id TEXT,
   drive_folder_id TEXT,
-  drive_url TEXT NOT NULL,
+  preview_url TEXT,
+  download_url TEXT,
+  drive_url TEXT,
   web_view_link TEXT,
   web_content_link TEXT,
   uploaded_by TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.module_archives ADD COLUMN IF NOT EXISTS google_drive_file_id TEXT;
+ALTER TABLE public.module_archives ADD COLUMN IF NOT EXISTS preview_url TEXT;
+ALTER TABLE public.module_archives ADD COLUMN IF NOT EXISTS download_url TEXT;
+ALTER TABLE public.module_archives ADD COLUMN IF NOT EXISTS mime_type TEXT;
+ALTER TABLE public.module_archives ADD COLUMN IF NOT EXISTS file_size TEXT;
+ALTER TABLE public.module_archives ADD COLUMN IF NOT EXISTS uploaded_by TEXT;
+ALTER TABLE public.module_archives ADD COLUMN IF NOT EXISTS subject_id TEXT;
+ALTER TABLE public.module_archives ADD COLUMN IF NOT EXISTS class_id TEXT;
+ALTER TABLE public.module_archives ADD COLUMN IF NOT EXISTS academic_year TEXT;
+ALTER TABLE public.module_archives ADD COLUMN IF NOT EXISTS semester TEXT;
 
 DROP TRIGGER IF EXISTS set_module_archives_updated_at ON public.module_archives;
 CREATE TRIGGER set_module_archives_updated_at
@@ -647,7 +698,43 @@ CREATE TABLE IF NOT EXISTS public.activity_logs (
   timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 15. INDEXES PERFORMA TINGGI
+-- 15. TABEL SYSTEM_BACKUPS (RIWAYAT BACKUP & METADATA BACKUP SISTEM)
+CREATE TABLE IF NOT EXISTS public.system_backups (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  name TEXT NOT NULL,
+  file_name TEXT,
+  file_size TEXT,
+  type TEXT DEFAULT 'FULL_SYSTEM',
+  status TEXT DEFAULT 'COMPLETED',
+  created_by TEXT REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_by_name TEXT,
+  app_version TEXT DEFAULT 'v2.5.0',
+  db_version TEXT DEFAULT 'v2.5.0',
+  record_counts JSONB DEFAULT '{}'::jsonb,
+  backup_data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.system_backups ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE public.system_backups ADD COLUMN IF NOT EXISTS file_name TEXT;
+ALTER TABLE public.system_backups ADD COLUMN IF NOT EXISTS file_size TEXT;
+ALTER TABLE public.system_backups ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'FULL_SYSTEM';
+ALTER TABLE public.system_backups ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'COMPLETED';
+ALTER TABLE public.system_backups ADD COLUMN IF NOT EXISTS created_by TEXT;
+ALTER TABLE public.system_backups ADD COLUMN IF NOT EXISTS created_by_name TEXT;
+ALTER TABLE public.system_backups ADD COLUMN IF NOT EXISTS app_version TEXT DEFAULT 'v2.5.0';
+ALTER TABLE public.system_backups ADD COLUMN IF NOT EXISTS db_version TEXT DEFAULT 'v2.5.0';
+ALTER TABLE public.system_backups ADD COLUMN IF NOT EXISTS record_counts JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.system_backups ADD COLUMN IF NOT EXISTS backup_data JSONB;
+ALTER TABLE public.system_backups ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+DROP TRIGGER IF EXISTS set_system_backups_updated_at ON public.system_backups;
+CREATE TRIGGER set_system_backups_updated_at
+  BEFORE UPDATE ON public.system_backups
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- 16. INDEXES PERFORMA TINGGI
 CREATE INDEX IF NOT EXISTS idx_students_nis ON public.students(nis);
 CREATE INDEX IF NOT EXISTS idx_grades_student_id ON public.grades(student_id);
 CREATE INDEX IF NOT EXISTS idx_grades_subject_id ON public.grades(subject_id);
@@ -663,8 +750,9 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(use
 CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON public.notifications(is_read);
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON public.notifications(created_at);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_timestamp ON public.activity_logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_system_backups_created_at ON public.system_backups(created_at);
 
--- 16. ROW LEVEL SECURITY (RLS) POLICIES PERMISSION (RBAC)
+-- 17. ROW LEVEL SECURITY (RLS) POLICIES PERMISSION (RBAC)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subjects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.classes ENABLE ROW LEVEL SECURITY;
@@ -679,6 +767,7 @@ ALTER TABLE public.document_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.school_principals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.system_backups ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Allow full access on profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Allow full access on subjects" ON public.subjects;
@@ -694,6 +783,7 @@ DROP POLICY IF EXISTS "Allow full access on document_settings" ON public.documen
 DROP POLICY IF EXISTS "Allow full access on school_principals" ON public.school_principals;
 DROP POLICY IF EXISTS "Allow full access on notifications" ON public.notifications;
 DROP POLICY IF EXISTS "Allow full access on activity_logs" ON public.activity_logs;
+DROP POLICY IF EXISTS "Allow full access on system_backups" ON public.system_backups;
 
 CREATE POLICY "Allow full access on profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow full access on subjects" ON public.subjects FOR ALL USING (true) WITH CHECK (true);
@@ -709,8 +799,9 @@ CREATE POLICY "Allow full access on document_settings" ON public.document_settin
 CREATE POLICY "Allow full access on school_principals" ON public.school_principals FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow full access on notifications" ON public.notifications FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow full access on activity_logs" ON public.activity_logs FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow full access on system_backups" ON public.system_backups FOR ALL USING (true) WITH CHECK (true);
 
--- 17. STORAGE BUCKETS & POLICIES (OPSIONAL UNTUK DOKUMEN/LAMPIRAN)
+-- 18. STORAGE BUCKETS & POLICIES (OPSIONAL UNTUK DOKUMEN/LAMPIRAN)
 INSERT INTO storage.buckets (id, name, public) 
 VALUES ('guruku-files', 'guruku-files', true) 
 ON CONFLICT (id) DO NOTHING;
@@ -721,7 +812,7 @@ DROP POLICY IF EXISTS "Public Upload Access Guruku Files" ON storage.objects;
 CREATE POLICY "Public Read Access Guruku Files" ON storage.objects FOR SELECT USING (bucket_id = 'guruku-files');
 CREATE POLICY "Public Upload Access Guruku Files" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'guruku-files');
 
--- 18. REFRESH SCHEMA CACHE POSTGREST / SUPABASE
+-- 19. REFRESH SCHEMA CACHE POSTGREST / SUPABASE
 NOTIFY pgrst, 'reload schema';
 `;
 }
@@ -751,7 +842,8 @@ export async function auditSupabaseDatabase(): Promise<DatabaseAuditReport> {
   const tables = [
     { name: 'profiles', columns: 12, hasFk: false },
     { name: 'subjects', columns: 7, hasFk: false },
-    { name: 'classes', columns: 7, hasFk: true },
+    { name: 'classes', columns: 8, hasFk: true },
+    { name: 'teacher_assignments', columns: 10, hasFk: true },
     { name: 'students', columns: 14, hasFk: true },
     { name: 'grades', columns: 16, hasFk: true },
     { name: 'attendance', columns: 10, hasFk: true },
@@ -759,7 +851,8 @@ export async function auditSupabaseDatabase(): Promise<DatabaseAuditReport> {
     { name: 'teaching_modules', columns: 16, hasFk: true },
     { name: 'system_settings', columns: 3, hasFk: false },
     { name: 'school_principals', columns: 9, hasFk: false },
-    { name: 'notifications', columns: 7, hasFk: false }
+    { name: 'notifications', columns: 7, hasFk: false },
+    { name: 'system_backups', columns: 14, hasFk: true }
   ];
 
   const items: DatabaseAuditItem[] = [];
@@ -840,6 +933,7 @@ export async function resetSupabaseDatabaseTables(): Promise<boolean> {
 
   try {
     // Delete operational records in order of FK dependencies
+    await client.from('teacher_assignments').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await client.from('attendance').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await client.from('grades').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await client.from('teaching_journals').delete().neq('id', '00000000-0000-0000-0000-000000000000');

@@ -141,13 +141,15 @@ export const KelasPage: React.FC = () => {
                 <h3 className="text-xl font-extrabold text-slate-800 dark:text-slate-100">{cls.name}</h3>
                 <p className="text-xs text-slate-500 mt-1">Total Siswa Terdaftar: <strong className="text-[#696cff]">{studentCount} siswa</strong></p>
 
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1">
-                  <p className="text-[11px] font-bold text-slate-400 uppercase">Guru Pengampu:</p>
-                  <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
-                    <UserCheck className="w-4 h-4 text-emerald-500" />
-                    <span>{homeroom ? homeroom.fullName : 'Belum Ditentukan'}</span>
+                {!isAdmin && user?.role === 'guru' && (
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1">
+                    <p className="text-[11px] font-bold text-slate-400 uppercase">Guru Pengampu:</p>
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
+                      <UserCheck className="w-4 h-4 text-emerald-500" />
+                      <span>{user?.fullName || 'Guru Pengampu'}</span>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {isAdmin && (

@@ -128,39 +128,33 @@ export const MataPelajaranPage: React.FC = () => {
                 <th className="px-6 py-4">Kode</th>
                 <th className="px-6 py-4">Nama Mata Pelajaran</th>
                 <th className="px-6 py-4">Deskripsi / Kurikulum</th>
-                <th className="px-6 py-4">Guru Pengampu</th>
+                {!isAdmin && user?.role === 'guru' && <th className="px-6 py-4">Guru Pengampu</th>}
                 {isAdmin && <th className="px-6 py-4 text-center">Aksi</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-200">
               {filteredSubjects.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-400">
+                  <td colSpan={isAdmin ? 4 : (user?.role === 'guru' ? 4 : 3)} className="px-6 py-8 text-center text-slate-400">
                     Tidak ada mata pelajaran ditemukan.
                   </td>
                 </tr>
               ) : (
                 filteredSubjects.map((subj) => {
-                  const assignedGurus = teachers.filter((t) => subj.teacherIds?.includes(t.id));
-
                   return (
                     <tr key={subj.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="px-6 py-4 font-bold text-[#696cff]">{subj.code}</td>
                       <td className="px-6 py-4 font-bold text-slate-800 dark:text-slate-100">{subj.name}</td>
                       <td className="px-6 py-4 text-slate-500 max-w-xs truncate">{subj.description || '-'}</td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-1 flex-wrap">
-                          {assignedGurus.length === 0 ? (
-                            <span className="text-slate-400 text-[11px]">Belum ditentukan</span>
-                          ) : (
-                            assignedGurus.map((g) => (
-                              <span key={g.id} className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold px-2 py-0.5 rounded-lg text-[10px]">
-                                {g.fullName}
-                              </span>
-                            ))
-                          )}
-                        </div>
-                      </td>
+                      {!isAdmin && user?.role === 'guru' && (
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold px-2 py-0.5 rounded-lg text-[10px]">
+                              {user?.fullName || 'Guru Pengampu'}
+                            </span>
+                          </div>
+                        </td>
+                      )}
                       {isAdmin && (
                         <td className="px-6 py-4 text-center">
                           <div className="flex items-center justify-center gap-2">
