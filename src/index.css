@@ -7,6 +7,14 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  html {
+    color-scheme: light;
+  }
+
+  html.dark, .dark {
+    color-scheme: dark;
+  }
+
   html, body {
     margin: 0;
     padding: 0;
@@ -20,6 +28,88 @@
 
   body {
     @apply bg-slate-50 text-slate-800 dark:bg-[#161625] dark:text-slate-100 transition-colors duration-200;
+  }
+
+  /* Global Select & Option dark mode contrast fix */
+  select {
+    color-scheme: light dark;
+  }
+
+  select option {
+    background-color: #ffffff;
+    color: #0f172a;
+  }
+
+  .dark select,
+  html.dark select,
+  body.dark select {
+    color-scheme: dark;
+  }
+
+  .dark select option,
+  html.dark select option,
+  body.dark select option {
+    background-color: #1e293b;
+    color: #f8fafc;
+  }
+
+  .dark select option:hover,
+  .dark select option:focus,
+  .dark select option:checked {
+    background-color: #334155;
+    color: #ffffff;
+  }
+
+  .dark select option:disabled {
+    color: #64748b;
+    background-color: #1e293b;
+  }
+
+  /* Inputs, Textareas, Date / Time Pickers */
+  .dark input[type="date"],
+  .dark input[type="time"],
+  .dark input[type="datetime-local"],
+  .dark input[type="month"] {
+    color-scheme: dark;
+    background-color: #1e293b;
+    color: #f8fafc;
+  }
+
+  .dark ::placeholder {
+    color: #94a3b8 !important;
+    opacity: 1;
+  }
+
+  /* SweetAlert2 Dark Mode Overrides */
+  .dark .swal2-popup {
+    background-color: #1e293b !important;
+    color: #f8fafc !important;
+    border: 1px solid #334155 !important;
+  }
+
+  .dark .swal2-title,
+  .dark .swal2-html-container,
+  .dark .swal2-content {
+    color: #f8fafc !important;
+  }
+
+  .dark .swal2-input,
+  .dark .swal2-select,
+  .dark .swal2-textarea {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+  }
+
+  /* Popovers, Tooltips & Dropdown menus */
+  .dark [role="menu"],
+  .dark [role="listbox"],
+  .dark [role="dialog"],
+  .dark [role="popover"],
+  .dark [data-radix-popper-content-wrapper] {
+    background-color: #1e293b;
+    color: #f8fafc;
+    border-color: #334155;
   }
 }
 

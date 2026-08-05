@@ -427,17 +427,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('[Supabase DB Sync Error] Failed fetching teaching_journals:', jrnErr);
       }
 
-      // 9. Teaching Modules / Module Archives
+      // 9. Teaching Modules / Module Archives / Archive Documents
       let rawModData: any[] = [];
-      const { data: maData, error: maErr } = await client.from('module_archives').select('*');
-      if (!maErr && maData && maData.length > 0) {
-        rawModData = maData;
+      const { data: adData, error: adErr } = await client.from('archive_documents').select('*');
+      if (!adErr && adData && adData.length > 0) {
+        rawModData = adData;
       } else {
-        const { data: tmData, error: tmErr } = await client.from('teaching_modules').select('*');
-        if (!tmErr && tmData) {
-          rawModData = tmData;
-        } else if (maErr && tmErr) {
-          console.warn('[Supabase DB Sync Error] Failed fetching module_archives / teaching_modules:', maErr, tmErr);
+        const { data: maData, error: maErr } = await client.from('module_archives').select('*');
+        if (!maErr && maData && maData.length > 0) {
+          rawModData = maData;
+        } else {
+          const { data: tmData, error: tmErr } = await client.from('teaching_modules').select('*');
+          if (!tmErr && tmData) {
+            rawModData = tmData;
+          } else if (maErr && tmErr) {
+            console.warn('[Supabase DB Sync Error] Failed fetching module_archives / teaching_modules:', maErr, tmErr);
+          }
         }
       }
 
@@ -448,6 +453,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return {
             id: m.id,
             title: m.title,
+            documentType: m.document_type || m.documentType || 'Modul Ajar',
+            folderId: m.folder_id || m.folderId,
             subjectId: m.subject_id || m.subjectId || '',
             subjectName: subject?.name || m.subject_name || 'Mata Pelajaran',
             classLevel: m.class_level || m.class_id || '7',
@@ -455,17 +462,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             semester: m.semester || '1',
             academicYear: m.academic_year || '2025/2026',
             description: m.description || '',
-            fileType: m.file_type || (m.mime_type?.includes('pdf') ? 'pdf' : m.mime_type?.includes('word') ? 'docx' : 'pptx'),
-            fileName: m.file_name || m.fileName || 'Dokumen.pdf',
+            fileType: m.file_type || (m.mime_type?.includes('pdf') || m.filename?.endsWith('.pdf') ? 'pdf' : m.mime_type?.includes('word') ? 'docx' : 'pptx'),
+            fileName: m.filename || m.file_name || m.fileName || 'Dokumen.pdf',
             mimeType: m.mime_type,
             fileSize: m.file_size || m.fileSize || '1.2 MB',
-            fileDriveId: m.drive_file_id || m.file_drive_id || m.google_drive_file_id || m.id,
+            fileDriveId: m.google_drive_file_id || m.drive_file_id || m.file_drive_id || m.id,
             driveFolderId: m.drive_folder_id || m.google_drive_folder_id,
             folderPath: m.folder_path,
-            webViewLink: m.drive_url || m.web_view_link || m.google_drive_url || '#',
-            webContentLink: m.web_content_link || m.drive_url || m.web_view_link || '#',
-            teacherId: m.uploaded_by || m.teacher_id || 'global_teacher',
+            webViewLink: m.preview_url || m.drive_url || m.web_view_link || m.google_drive_url || '#',
+            webContentLink: m.download_url || m.web_content_link || m.drive_url || m.web_view_link || '#',
+            teacherId: m.teacher_id || m.uploaded_by || 'global_teacher',
             teacherName: teacher?.fullName || m.teacher_name || 'Guru Pengajar',
+            uploadedBy: m.uploaded_by || m.teacher_id,
             createdAt: m.created_at || m.uploaded_at || new Date().toISOString(),
             updatedAt: m.updated_at
           };
@@ -1560,13 +1568,37 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updated_at: new Date().toISOString()
       };
 
-      // Primary insertion to module_archives
-      const { error: maErr } = await client.from('module_archives').insert([archivePayload]);
-      if (maErr) {
-        console.warn('[Supabase DB Warning] module_archives insert failed, trying teaching_modules:', maErr);
+      // 1. Primary insertion to archive_documents
+      const docPayload: any = {
+        id: newModId,
+        folder_id: mod.folderId || null,
+        teacher_id: mod.teacherId || null,
+        subject_id: mod.subjectId || null,
+        class_id: mod.classId || mod.classLevel || '7',
+        academic_year: mod.academicYear,
+        semester: mod.semester,
+        document_type: mod.documentType || 'Modul Ajar',
+        title: mod.title,
+        filename: mod.fileName,
+        mime_type: mod.mimeType || 'application/pdf',
+        file_size: mod.fileSize || '',
+        google_drive_file_id: mod.fileDriveId,
+        preview_url: previewUrl,
+        download_url: downloadUrl,
+        uploaded_by: mod.uploadedBy || mod.teacherId || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { error: adErr } = await client.from('archive_documents').insert([docPayload]);
+      if (adErr) {
+        console.warn('[Supabase DB Warning] archive_documents insert failed, trying fallback tables:', adErr);
       }
 
-      // Secondary insertion to teaching_modules
+      // 2. Secondary insertion to module_archives
+      await client.from('module_archives').insert([archivePayload]);
+
+      // 3. Tertiary insertion to teaching_modules
       await client.from('teaching_modules').insert([{
         id: newModId,
         title: mod.title,
@@ -1622,7 +1654,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       if (updatedMod.semester !== undefined) updatePayload.semester = updatedMod.semester;
       if (updatedMod.academicYear !== undefined) updatePayload.academic_year = updatedMod.academicYear;
-      if (updatedMod.fileName !== undefined) updatePayload.file_name = updatedMod.fileName;
+      if (updatedMod.documentType !== undefined) updatePayload.document_type = updatedMod.documentType;
+      if (updatedMod.fileName !== undefined) {
+        updatePayload.file_name = updatedMod.fileName;
+        updatePayload.filename = updatedMod.fileName;
+      }
       if (updatedMod.fileSize !== undefined) updatePayload.file_size = updatedMod.fileSize;
       if (updatedMod.fileDriveId !== undefined) {
         updatePayload.google_drive_file_id = updatedMod.fileDriveId;
@@ -1639,6 +1675,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updatePayload.web_content_link = updatedMod.webContentLink;
       }
 
+      await client.from('archive_documents').update(updatePayload).eq('id', id);
       await client.from('module_archives').update(updatePayload).eq('id', id);
       await client.from('teaching_modules').update(updatePayload).eq('id', id);
 
@@ -1667,6 +1704,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // Step 2: Delete metadata from Supabase PostgreSQL
+      await client.from('archive_documents').delete().eq('id', id);
       await client.from('module_archives').delete().eq('id', id);
       await client.from('teaching_modules').delete().eq('id', id);
 

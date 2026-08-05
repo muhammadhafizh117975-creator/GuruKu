@@ -600,7 +600,60 @@ CREATE TRIGGER set_teaching_modules_updated_at
   BEFORE UPDATE ON public.teaching_modules
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- 11. TABEL SYSTEM_SETTINGS, ACADEMIC_SETTINGS & DOCUMENT_SETTINGS
+-- 11. TABEL ARCHIVE_CATEGORIES, ARCHIVE_FOLDERS & ARCHIVE_DOCUMENTS (STRUKTUR FOLDER HIRARKI ARSIP MODUL AJAR)
+CREATE TABLE IF NOT EXISTS public.archive_categories (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  name TEXT UNIQUE NOT NULL CHECK (name IN ('CP', 'ATP', 'KKTP', 'Prota', 'Promes', 'Modul Ajar')),
+  description TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+INSERT INTO public.archive_categories (id, name, description) VALUES
+  ('cat_cp', 'CP', 'Capaian Pembelajaran'),
+  ('cat_atp', 'ATP', 'Alur Tujuan Pembelajaran'),
+  ('cat_kktp', 'KKTP', 'Kriteria Ketercapaian Tujuan Pembelajaran'),
+  ('cat_prota', 'Prota', 'Program Tahunan'),
+  ('cat_promes', 'Promes', 'Program Semester'),
+  ('cat_modul', 'Modul Ajar', 'Modul Ajar / RPP')
+ON CONFLICT (name) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS public.archive_folders (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  teacher_id TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
+  semester CHAR(1) CHECK (semester IN ('1', '2')),
+  category_id TEXT REFERENCES public.archive_categories(id) ON DELETE SET NULL,
+  folder_name TEXT NOT NULL,
+  google_drive_folder_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.archive_documents (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  folder_id TEXT REFERENCES public.archive_folders(id) ON DELETE SET NULL,
+  teacher_id TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
+  subject_id TEXT REFERENCES public.subjects(id) ON DELETE SET NULL,
+  class_id TEXT,
+  academic_year TEXT NOT NULL,
+  semester CHAR(1) CHECK (semester IN ('1', '2')),
+  document_type TEXT NOT NULL CHECK (document_type IN ('CP', 'ATP', 'KKTP', 'Prota', 'Promes', 'Modul Ajar')),
+  title TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  mime_type TEXT DEFAULT 'application/pdf',
+  file_size TEXT,
+  google_drive_file_id TEXT NOT NULL,
+  preview_url TEXT NOT NULL,
+  download_url TEXT NOT NULL,
+  uploaded_by TEXT REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS set_archive_documents_updated_at ON public.archive_documents;
+CREATE TRIGGER set_archive_documents_updated_at
+  BEFORE UPDATE ON public.archive_documents
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- 12. TABEL SYSTEM_SETTINGS, ACADEMIC_SETTINGS & DOCUMENT_SETTINGS
 CREATE TABLE IF NOT EXISTS public.system_settings (
   key TEXT PRIMARY KEY,
   value JSONB NOT NULL,

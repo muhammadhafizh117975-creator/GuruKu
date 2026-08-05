@@ -227,15 +227,13 @@ export const NilaiPage: React.FC = () => {
         </div>
 
         <div>
-          <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Semester & Tahun</label>
-          <select
-            value={semester}
-            onChange={(e) => setSemester(e.target.value as '1' | '2')}
-            className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-100"
-          >
-            <option value="1">Semester 1 (Ganjil) - 2025/2026</option>
-            <option value="2">Semester 2 (Genap) - 2025/2026</option>
-          </select>
+          <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Semester & Tahun Ajaran (Otomatis)</label>
+          <div className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center justify-between shadow-2xs">
+            <span>Semester {activeAcademicYear.semester || '1'} ({activeAcademicYear.semester === '2' ? 'Genap' : 'Ganjil'})</span>
+            <span className="text-[10px] bg-[#696cff]/10 text-[#696cff] font-extrabold px-2 py-0.5 rounded-md border border-[#696cff]/20">
+              T.A. {activeAcademicYear.year || '2025/2026'}
+            </span>
+          </div>
         </div>
       </div>
 

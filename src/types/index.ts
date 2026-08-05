@@ -131,9 +131,13 @@ export interface TeachingJournal {
   createdAt: string;
 }
 
+export type ArchiveDocumentType = 'CP' | 'ATP' | 'KKTP' | 'Prota' | 'Promes' | 'Modul Ajar';
+
 export interface TeachingModule {
   id: string;
   title: string; // Judul Modul / RPP
+  documentType?: ArchiveDocumentType; // CP | ATP | KKTP | Prota | Promes | Modul Ajar
+  folderId?: string;
   subjectId: string;
   subjectName?: string;
   classLevel: string; // Kelas / Tingkat
@@ -152,8 +156,51 @@ export interface TeachingModule {
   webContentLink: string;
   teacherId: string;
   teacherName?: string;
+  uploadedBy?: string;
   createdAt: string;
   updatedAt?: string;
+}
+
+export interface ArchiveCategory {
+  id: string;
+  name: ArchiveDocumentType;
+  description?: string;
+  createdAt?: string;
+}
+
+export interface ArchiveFolder {
+  id: string;
+  teacherId: string;
+  semester: '1' | '2';
+  categoryId?: string;
+  categoryName?: ArchiveDocumentType;
+  folderName: string;
+  googleDriveFolderId?: string;
+  createdAt?: string;
+}
+
+export interface ArchiveDocument {
+  id: string;
+  folderId?: string;
+  teacherId: string;
+  teacherName?: string;
+  subjectId: string;
+  subjectName?: string;
+  classId?: string;
+  classLevel: string;
+  academicYear: string;
+  semester: '1' | '2';
+  documentType: ArchiveDocumentType;
+  title: string;
+  filename: string;
+  mimeType?: string;
+  fileSize?: string;
+  googleDriveFileId: string;
+  previewUrl: string;
+  downloadUrl: string;
+  uploadedBy: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PaperMargin {

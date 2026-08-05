@@ -17,6 +17,18 @@ import {
   Printer
 } from 'lucide-react';
 
+const toRomanGrade = (gl?: string) => {
+  if (!gl) return '';
+  const trimmed = gl.trim().toUpperCase();
+  if (trimmed === '7' || trimmed === 'VII') return 'VII';
+  if (trimmed === '8' || trimmed === 'VIII') return 'VIII';
+  if (trimmed === '9' || trimmed === 'IX') return 'IX';
+  if (trimmed === '10' || trimmed === 'X') return 'X';
+  if (trimmed === '11' || trimmed === 'XI') return 'XI';
+  if (trimmed === '12' || trimmed === 'XII') return 'XII';
+  return trimmed;
+};
+
 export const LaporanAbsensiPage: React.FC = () => {
   const { user } = useAuth();
   const { classes, subjects, teachers, attendance, systemSettings, activePrincipal, academicYears } = useData();
@@ -33,6 +45,19 @@ export const LaporanAbsensiPage: React.FC = () => {
   const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
 
   const gradeLevels = Array.from(new Set(classes.map((c) => c.gradeLevel))).sort();
+
+  // Dynamic grade options derived from database classes for Administrator filter
+  const classGradeLevelsFromDb: string[] = Array.from(
+    new Set(
+      classes
+        .map((c) => toRomanGrade(c.gradeLevel) || c.gradeLevel)
+        .filter((gl): gl is string => Boolean(gl))
+    )
+  );
+  const defaultGradeLevels = ['VII', 'VIII', 'IX'];
+  const adminGradeOptions: string[] = Array.from(
+    new Set([...defaultGradeLevels, ...classGradeLevelsFromDb])
+  ).sort((a: string, b: string) => a.localeCompare(b, undefined, { numeric: true }));
 
   const selectedSubjObj = subjects.find((s) => s.id === selectedSubjectFilter);
   const selectedClassObj = classes.find((c) => c.id === selectedClassFilter);
@@ -74,7 +99,16 @@ export const LaporanAbsensiPage: React.FC = () => {
       (a.studentNis && a.studentNis.includes(searchTerm));
 
     // 2. Class
-    const matchesClass = isGuru || selectedClassFilter === 'all' || a.classId === selectedClassFilter;
+    const targetClass = classes.find((c) => c.id === a.classId);
+    const targetGrade = targetClass
+      ? toRomanGrade(targetClass.gradeLevel)
+      : (a.className ? toRomanGrade(a.className.split(' ')[0]) : '');
+
+    const matchesClass = isGuru
+      ? (selectedClassFilter === 'all' || a.classId === selectedClassFilter)
+      : (selectedClassFilter === 'all' ||
+         targetGrade === selectedClassFilter ||
+         (targetClass && (targetClass.gradeLevel === selectedClassFilter || targetClass.name.startsWith(selectedClassFilter))));
 
     // 3. Subject
     const matchesSubject = isGuru || selectedSubjectFilter === 'all' || a.subjectId === selectedSubjectFilter;
@@ -83,11 +117,10 @@ export const LaporanAbsensiPage: React.FC = () => {
     const matchesTeacher = isGuru || selectedTeacherFilter === 'all' || a.teacherId === selectedTeacherFilter;
 
     // 5. Grade Level
-    const targetClass = classes.find((c) => c.id === a.classId);
     const matchesGradeLevel =
-      isGuru ||
-      selectedGradeLevelFilter === 'all' ||
-      (targetClass && targetClass.gradeLevel === selectedGradeLevelFilter);
+      isGuru
+        ? (selectedGradeLevelFilter === 'all' || (targetClass && targetClass.gradeLevel === selectedGradeLevelFilter))
+        : true;
 
     // 6. Month & Week
     const attDate = new Date(a.date);
@@ -136,8 +169,12 @@ export const LaporanAbsensiPage: React.FC = () => {
     academicYear: activeAcademicYear,
     semester: activeSemester,
     subjectName: selectedSubjObj ? selectedSubjObj.name : 'Semua Mata Pelajaran',
-    gradeLevel: selectedGradeLevelFilter !== 'all' ? `Tingkat ${selectedGradeLevelFilter}` : 'Semua Tingkat',
-    className: selectedClassObj ? `Kelas ${selectedClassObj.name}` : 'Semua Kelas',
+    gradeLevel: isGuru
+      ? (selectedGradeLevelFilter !== 'all' ? `Tingkat ${selectedGradeLevelFilter}` : 'Semua Tingkat')
+      : (selectedClassFilter !== 'all' ? `Tingkat ${selectedClassFilter}` : 'Semua Tingkat'),
+    className: isGuru
+      ? (selectedClassObj ? `Kelas ${selectedClassObj.name}` : 'Semua Kelas')
+      : (selectedClassFilter === 'all' ? 'Semua Kelas' : `Kelas ${selectedClassFilter}`),
     teacherName: user?.fullName || 'Guru Pengajar'
   };
 
@@ -293,23 +330,6 @@ export const LaporanAbsensiPage: React.FC = () => {
               </select>
             </div>
 
-            {/* Filter Tingkat */}
-            <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
-              <School className="w-4 h-4 text-indigo-500 shrink-0" />
-              <select
-                value={selectedGradeLevelFilter}
-                onChange={(e) => setSelectedGradeLevelFilter(e.target.value)}
-                className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
-              >
-                <option value="all">Semua Tingkat</option>
-                {gradeLevels.map((gl) => (
-                  <option key={gl} value={gl}>
-                    Tingkat {gl}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             {/* Filter Kelas */}
             <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center gap-2">
               <School className="w-4 h-4 text-[#696cff] shrink-0" />
@@ -319,9 +339,9 @@ export const LaporanAbsensiPage: React.FC = () => {
                 className="w-full bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-hidden"
               >
                 <option value="all">Semua Kelas</option>
-                {classes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    Kelas {c.name}
+                {adminGradeOptions.map((gl) => (
+                  <option key={gl} value={gl}>
+                    {gl}
                   </option>
                 ))}
               </select>
