@@ -31,7 +31,9 @@ export const AbsensiPage: React.FC = () => {
     }
   }, [classes, selectedClassId]);
 
-  const classStudents = students.filter((s) => s.classId === selectedClassId);
+  const classStudents = students
+    .filter((s) => s.classId === selectedClassId)
+    .sort((a, b) => a.fullName.localeCompare(b.fullName, 'id', { sensitivity: 'base' }));
 
   const [statusMap, setStatusMap] = useState<Record<string, { status: AttendanceStatus; notes: string }>>({});
 

@@ -17,15 +17,17 @@ export const LaporanNilaiPage: React.FC = () => {
   const selectedSubjObj = subjects.find((s) => s.id === selectedSubjectFilter);
   const selectedClassObj = classes.find((c) => c.id === selectedClassFilter);
 
-  const filteredGrades = grades.filter((g) => {
-    const matchesSearch =
-      (g.studentName && g.studentName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (g.studentNis && g.studentNis.includes(searchTerm));
-    const matchesSubj = selectedSubjectFilter === 'all' || g.subjectId === selectedSubjectFilter;
-    const matchesClass = selectedClassFilter === 'all' || g.classId === selectedClassFilter;
+  const filteredGrades = grades
+    .filter((g) => {
+      const matchesSearch =
+        (g.studentName && g.studentName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (g.studentNis && g.studentNis.includes(searchTerm));
+      const matchesSubj = selectedSubjectFilter === 'all' || g.subjectId === selectedSubjectFilter;
+      const matchesClass = selectedClassFilter === 'all' || g.classId === selectedClassFilter;
 
-    return matchesSearch && matchesSubj && matchesClass;
-  });
+      return matchesSearch && matchesSubj && matchesClass;
+    })
+    .sort((a, b) => (a.studentName || '').localeCompare(b.studentName || '', 'id', { sensitivity: 'base' }));
 
   const activeAcademicYear = systemSettings.academicYear || '2025/2026';
   const activeSemester = systemSettings.semester || 'Ganjil';

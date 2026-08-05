@@ -318,7 +318,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // 5. Students
-      const { data: stdData, error: stdErr } = await client.from('students').select('*');
+      const { data: stdData, error: stdErr } = await client.from('students').select('*').order('full_name', { ascending: true });
       let fetchedStudents: Student[] = [];
       if (!stdErr && stdData) {
         fetchedStudents = stdData.map((s: any) => {
@@ -333,6 +333,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             createdAt: s.created_at
           };
         });
+        fetchedStudents.sort((a, b) => a.fullName.localeCompare(b.fullName, 'id', { sensitivity: 'base' }));
         setStudents(fetchedStudents);
       } else if (stdErr) {
         console.warn('[Supabase DB Sync Error] Failed fetching students:', stdErr);
@@ -2039,9 +2040,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Filtered collections for Guru vs Admin
   const visibleSubjects = assignedSubjects;
   const visibleClasses = assignedClasses;
-  const visibleStudents = isGuru
-    ? students.filter((st) => assignedClassIds.has(st.classId))
-    : students;
+  const visibleStudents = (
+    isGuru
+      ? students.filter((st) => assignedClassIds.has(st.classId))
+      : students
+  ).slice().sort((a, b) => a.fullName.localeCompare(b.fullName, 'id', { sensitivity: 'base' }));
   const visibleGrades = isGuru
     ? grades.filter(
         (g) =>

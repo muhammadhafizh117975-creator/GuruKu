@@ -32,7 +32,9 @@ export const NilaiPage: React.FC = () => {
   }, [classes, selectedClassId]);
 
   // Matrix state for inputs
-  const classStudents = students.filter((s) => s.classId === selectedClassId);
+  const classStudents = students
+    .filter((s) => s.classId === selectedClassId)
+    .sort((a, b) => a.fullName.localeCompare(b.fullName, 'id', { sensitivity: 'base' }));
 
   const [scores, setScores] = useState<
     Record<

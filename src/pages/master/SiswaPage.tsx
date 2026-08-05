@@ -263,13 +263,15 @@ export const SiswaPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 10;
 
-  const filteredStudents = students.filter((s) => {
-    const matchesSearch =
-      s.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.nis.includes(searchTerm);
-    const matchesClass = selectedClassFilter === 'all' || s.classId === selectedClassFilter;
-    return matchesSearch && matchesClass;
-  });
+  const filteredStudents = students
+    .filter((s) => {
+      const matchesSearch =
+        s.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.nis.includes(searchTerm);
+      const matchesClass = selectedClassFilter === 'all' || s.classId === selectedClassFilter;
+      return matchesSearch && matchesClass;
+    })
+    .sort((a, b) => a.fullName.localeCompare(b.fullName, 'id', { sensitivity: 'base' }));
 
   // Reset to page 1 on filter/search change
   React.useEffect(() => {

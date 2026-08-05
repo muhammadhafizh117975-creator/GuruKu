@@ -147,7 +147,7 @@ export const LaporanAbsensiPage: React.FC = () => {
       matchesMonth &&
       matchesWeek
     );
-  });
+  }).sort((a, b) => (a.studentName || '').localeCompare(b.studentName || '', 'id', { sensitivity: 'base' }));
 
   const handleResetFilters = () => {
     setSearchTerm('');
