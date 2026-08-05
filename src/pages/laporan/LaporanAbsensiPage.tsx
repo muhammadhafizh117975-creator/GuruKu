@@ -164,6 +164,8 @@ export const LaporanAbsensiPage: React.FC = () => {
   const activeAcademicYear = systemSettings.academicYear || '2025/2026';
   const activeSemester = systemSettings.semester || 'Ganjil';
 
+  const selectedTeacherObj = teachers.find((t) => t.id === selectedTeacherFilter);
+
   const metaInfo: ReportMeta = {
     title: 'LAPORAN REKAPITULASI PRESENSI SISWA',
     academicYear: activeAcademicYear,
@@ -175,7 +177,8 @@ export const LaporanAbsensiPage: React.FC = () => {
     className: isGuru
       ? (selectedClassObj ? `Kelas ${selectedClassObj.name}` : 'Semua Kelas')
       : (selectedClassFilter === 'all' ? 'Semua Kelas' : `Kelas ${selectedClassFilter}`),
-    teacherName: user?.fullName || 'Guru Pengajar'
+    teacherName: selectedTeacherObj ? selectedTeacherObj.fullName : (user?.fullName || 'Guru Pengajar'),
+    teacherNuptk: selectedTeacherObj ? (selectedTeacherObj.nipNuptk || '-') : (user?.nipNuptk || '-')
   };
 
   const handleExportPdf = async () => {

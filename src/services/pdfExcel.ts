@@ -26,7 +26,11 @@ export const PdfExcelService = {
     startY: number,
     settings: SystemSettings,
     user?: UserProfile | null,
-    activePrincipal?: SchoolPrincipal | null
+    activePrincipal?: SchoolPrincipal | null,
+    metaInfo?: {
+      teacherName?: string;
+      teacherNuptk?: string;
+    }
   ) {
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -59,8 +63,8 @@ export const PdfExcelService = {
     }
 
     const isAdmin = user?.role === 'admin';
-    const teacherName = user?.fullName || (isAdmin ? 'Administrator Sistem' : 'Guru Pengajar');
-    const teacherNuptk = user?.nipNuptk || '-';
+    const teacherName = metaInfo?.teacherName || user?.fullName || (isAdmin ? 'Administrator Sistem' : 'Guru Pengajar');
+    const teacherNuptk = metaInfo?.teacherNuptk || user?.nipNuptk || '-';
     const rightRoleTitle = isAdmin ? 'Administrator Sistem' : 'Guru Mata Pelajaran';
 
     // Column positions
@@ -80,30 +84,33 @@ export const PdfExcelService = {
     doc.text(rightRoleTitle, rightX, y + 5);
 
     // Signature Space
-    const nameY = y + 28;
+    const nameY = y + 26;
 
     // Kiri: (Nama Kepala Sekolah) underlined
     doc.setFont('helvetica', 'bold');
-    doc.text(`(${headmasterName})`, leftX, nameY);
-    const headmasterWidth = doc.getTextWidth(`(${headmasterName})`);
-    doc.line(leftX, nameY + 1, leftX + headmasterWidth, nameY + 1);
+    doc.setFontSize(10);
+    const headmasterText = `(${headmasterName})`;
+    doc.text(headmasterText, leftX, nameY);
+    const headmasterWidth = doc.getTextWidth(headmasterText);
+    doc.line(leftX, nameY + 0.8, leftX + headmasterWidth, nameY + 0.8);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.text(`NUKS. ${headmasterNuks}`, leftX, nameY + 6);
+    doc.text(`NUKS. ${headmasterNuks}`, leftX, nameY + 5);
 
     // Kanan: (Nama Guru) underlined
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
-    doc.text(`(${teacherName})`, rightX, nameY);
-    const teacherWidth = doc.getTextWidth(`(${teacherName})`);
-    doc.line(rightX, nameY + 1, rightX + teacherWidth, nameY + 1);
+    const teacherText = `(${teacherName})`;
+    doc.text(teacherText, rightX, nameY);
+    const teacherWidth = doc.getTextWidth(teacherText);
+    doc.line(rightX, nameY + 0.8, rightX + teacherWidth, nameY + 0.8);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.text(`NUPTK. ${teacherNuptk}`, rightX, nameY + 6);
+    doc.text(`NUPTK. ${teacherNuptk}`, rightX, nameY + 5);
 
-    return nameY + 12;
+    return nameY + 10;
   },
 
   /**
@@ -215,13 +222,20 @@ export const PdfExcelService = {
       }
     }
 
-    // Draw Document Title
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.setTextColor(30, 41, 59);
-    doc.text(title.toUpperCase(), doc.internal.pageSize.getWidth() / 2, currentY + 4, { align: 'center' });
+    // Draw Document Title Header Block
+    const schoolName = settings?.schoolInfo?.schoolName || 'SMP PERTIWI';
+    const academicYearStr = `Tahun Pelajaran ${meta?.academicYear || settings?.schoolInfo?.academicYearActive || '2025/2026'}`;
 
-    currentY += 10;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(30, 41, 59);
+    const centerX = doc.internal.pageSize.getWidth() / 2;
+
+    doc.text(title.toUpperCase(), centerX, currentY + 4, { align: 'center' });
+    doc.text(schoolName.toUpperCase(), centerX, currentY + 9, { align: 'center' });
+    doc.text(academicYearStr, centerX, currentY + 14, { align: 'center' });
+
+    currentY += 19;
 
     // Draw Dynamic Metadata Header Box if meta provided
     if (meta) {
@@ -231,31 +245,26 @@ export const PdfExcelService = {
 
       doc.setFillColor(248, 250, 252); // slate-50
       doc.setDrawColor(226, 232, 240); // slate-200
-      doc.roundedRect(leftMargin, boxY, boxWidth, 18, 2, 2, 'FD');
+      doc.roundedRect(leftMargin, boxY, boxWidth, 13, 2, 2, 'FD');
 
-      doc.setFontSize(8);
+      doc.setFontSize(8.5);
       doc.setFont('helvetica', 'normal');
-      doc.setTextColor(100, 116, 139); // slate-500
+      doc.setTextColor(51, 65, 85); // slate-700
 
       const col1X = leftMargin + 4;
       const col2X = leftMargin + (boxWidth / 2) + 4;
 
-      const printDateStr = meta.printDate || this.formatIndonesianDate();
-      const schoolName = settings.schoolInfo?.schoolName || 'SMP Negeri';
+      const teacherDisplayName = meta.teacherName || 'Guru Pengajar';
 
       // Line 1
-      doc.text(`Sekolah: ${schoolName}`, col1X, boxY + 5);
-      doc.text(`Tahun Ajaran: ${meta.academicYear || '2025/2026'}`, col2X, boxY + 5);
+      doc.text(`Mata Pelajaran : ${meta.subjectName || 'Semua Mata Pelajaran'}`, col1X, boxY + 4.5);
+      doc.text(`Kelas : ${meta.className || 'Semua Kelas'}`, col2X, boxY + 4.5);
 
       // Line 2
-      doc.text(`Mata Pelajaran: ${meta.subjectName || 'Semua Mapel'}`, col1X, boxY + 10);
-      doc.text(`Semester: ${meta.semester || 'Ganjil'}`, col2X, boxY + 10);
+      doc.text(`Guru : ${teacherDisplayName}`, col1X, boxY + 9.5);
+      doc.text(`Semester : ${meta.semester || 'Ganjil'}`, col2X, boxY + 9.5);
 
-      // Line 3
-      doc.text(`Kelas / Tingkat: ${meta.className || 'Semua Kelas'} (${meta.gradeLevel || 'Semua Tingkat'})`, col1X, boxY + 15);
-      doc.text(`Guru: ${meta.teacherName || 'Guru Pengajar'} | Tgl Cetak: ${printDateStr}`, col2X, boxY + 15);
-
-      currentY += 23;
+      currentY += 17;
     }
 
     return { doc, currentY, leftMargin, rightMargin, topMargin };
@@ -276,10 +285,12 @@ export const PdfExcelService = {
       subjectName?: string;
       gradeLevel?: string;
       className?: string;
+      teacherName?: string;
+      teacherNuptk?: string;
     }
   ) {
-    const title = 'Laporan Rekapitulasi Nilai Siswa';
-    const teacherName = user?.fullName || 'Guru Pengajar';
+    const title = 'LAPORAN REKAPITULASI NILAI AKADEMIK SISWA';
+    const teacherName = metaInfo?.teacherName || user?.fullName || 'Guru Pengajar';
 
     const { doc, currentY } = await this.createConfiguredPdf(
       settings,
@@ -345,7 +356,10 @@ export const PdfExcelService = {
     });
 
     const finalY = (doc as any).lastAutoTable?.finalY || currentY + 50;
-    this.addSignatureBlock(doc, finalY, settings, user, activePrincipal);
+    this.addSignatureBlock(doc, finalY, settings, user, activePrincipal, {
+      teacherName: metaInfo?.teacherName,
+      teacherNuptk: metaInfo?.teacherNuptk
+    });
 
     doc.save(`Laporan_Nilai_Siswa_${Date.now()}.pdf`);
   },
@@ -392,10 +406,12 @@ export const PdfExcelService = {
       subjectName?: string;
       gradeLevel?: string;
       className?: string;
+      teacherName?: string;
+      teacherNuptk?: string;
     }
   ) {
-    const title = 'Laporan Rekapitulasi Presensi Siswa';
-    const teacherName = user?.fullName || 'Guru Pengajar';
+    const title = 'LAPORAN REKAPITULASI PRESENSI SISWA';
+    const teacherName = metaInfo?.teacherName || user?.fullName || 'Guru Pengajar';
 
     const { doc, currentY } = await this.createConfiguredPdf(
       settings,
@@ -451,7 +467,10 @@ export const PdfExcelService = {
     });
 
     const finalY = (doc as any).lastAutoTable?.finalY || currentY + 50;
-    this.addSignatureBlock(doc, finalY, settings, user, activePrincipal);
+    this.addSignatureBlock(doc, finalY, settings, user, activePrincipal, {
+      teacherName: metaInfo?.teacherName,
+      teacherNuptk: metaInfo?.teacherNuptk
+    });
 
     doc.save(`Laporan_Absensi_${Date.now()}.pdf`);
   },
@@ -490,10 +509,12 @@ export const PdfExcelService = {
       subjectName?: string;
       gradeLevel?: string;
       className?: string;
+      teacherName?: string;
+      teacherNuptk?: string;
     }
   ) {
-    const title = 'Laporan Jurnal Mengajar Guru';
-    const teacherName = user?.fullName || 'Guru Pengajar';
+    const title = 'LAPORAN REKAPITULASI JURNAL MENGAJAR GURU';
+    const teacherName = metaInfo?.teacherName || user?.fullName || 'Guru Pengajar';
 
     const { doc, currentY } = await this.createConfiguredPdf(
       settings,
@@ -552,7 +573,10 @@ export const PdfExcelService = {
     });
 
     const finalY = (doc as any).lastAutoTable?.finalY || currentY + 50;
-    this.addSignatureBlock(doc, finalY, settings, user, activePrincipal);
+    this.addSignatureBlock(doc, finalY, settings, user, activePrincipal, {
+      teacherName: metaInfo?.teacherName,
+      teacherNuptk: metaInfo?.teacherNuptk
+    });
 
     doc.save(`Laporan_Jurnal_Mengajar_${Date.now()}.pdf`);
   },

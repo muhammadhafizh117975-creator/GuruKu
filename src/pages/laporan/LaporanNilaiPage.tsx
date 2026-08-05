@@ -37,7 +37,8 @@ export const LaporanNilaiPage: React.FC = () => {
     subjectName: selectedSubjObj ? selectedSubjObj.name : 'Semua Mata Pelajaran',
     gradeLevel: selectedClassObj ? `Tingkat ${selectedClassObj.gradeLevel}` : 'Semua Tingkat',
     className: selectedClassObj ? `Kelas ${selectedClassObj.name}` : 'Semua Kelas',
-    teacherName: user?.fullName || 'Guru Pengajar'
+    teacherName: user?.fullName || 'Guru Pengajar',
+    teacherNuptk: user?.nipNuptk || '-'
   };
 
   const handleExportPdf = async () => {

@@ -11,6 +11,7 @@ export interface ReportMeta {
   gradeLevel?: string;
   className?: string;
   teacherName?: string;
+  teacherNuptk?: string;
   printDate?: string;
 }
 
@@ -71,7 +72,7 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
   // Guru info
   const isAdmin = currentUser?.role === 'admin';
   const teacherName = meta.teacherName || currentUser?.fullName || (isAdmin ? 'Administrator Sistem' : 'Guru Pengajar');
-  const teacherNuptk = currentUser?.nipNuptk || '-';
+  const teacherNuptk = meta.teacherNuptk || currentUser?.nipNuptk || '-';
   const teacherRoleTitle = isAdmin ? 'Administrator Sistem' : 'Guru Mata Pelajaran';
 
   // Margins converted to mm or css string
@@ -198,47 +199,35 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
               )}
 
               {/* JUDUL LAPORAN */}
-              <div className="text-center my-4">
-                <h2 className="text-base font-bold uppercase tracking-wider text-slate-900 underline decoration-2 underline-offset-4">
+              <div className="text-center my-4 space-y-0.5">
+                <h2 className="text-base font-bold uppercase tracking-wider text-slate-900">
                   {meta.title}
                 </h2>
+                <h3 className="text-base font-bold uppercase tracking-wider text-slate-900">
+                  {schoolInfo?.schoolName || 'SMP PERTIWI'}
+                </h3>
+                <p className="text-base font-bold tracking-wider text-slate-900">
+                  Tahun Pelajaran {meta.academicYear || '2025/2026'}
+                </p>
               </div>
 
-              {/* HEADER INFORMASI DINAMIS LAPORAN (GRID META DATA) */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 mb-5 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+              {/* HEADER INFORMASI DINAMIS LAPORAN (KOTAK INFORMASI) */}
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 mb-5 p-3.5 bg-slate-50/80 rounded-xl border border-slate-200/90 text-xs text-slate-800">
                 <div>
-                  <span className="font-semibold text-slate-500">Sekolah:</span>{' '}
-                  <strong className="text-slate-800">{schoolInfo?.schoolName || '-'}</strong>
+                  <span className="font-semibold text-slate-600">Mata Pelajaran :</span>{' '}
+                  <strong className="text-slate-900">{meta.subjectName || 'Semua Mata Pelajaran'}</strong>
                 </div>
                 <div>
-                  <span className="font-semibold text-slate-500">Tahun Ajaran:</span>{' '}
-                  <strong className="text-slate-800">{meta.academicYear || '2025/2026'}</strong>
+                  <span className="font-semibold text-slate-600">Kelas :</span>{' '}
+                  <strong className="text-slate-900">{meta.className || 'Semua Kelas'}</strong>
                 </div>
                 <div>
-                  <span className="font-semibold text-slate-500">Mata Pelajaran:</span>{' '}
-                  <strong className="text-[#696cff]">{meta.subjectName || 'Semua Mata Pelajaran'}</strong>
+                  <span className="font-semibold text-slate-600">Guru :</span>{' '}
+                  <strong className="text-slate-900">{teacherName}</strong>
                 </div>
                 <div>
-                  <span className="font-semibold text-slate-500">Semester:</span>{' '}
-                  <strong className="text-slate-800">{meta.semester || 'Ganjil'}</strong>
-                </div>
-                <div>
-                  <span className="font-semibold text-slate-500">Kelas / Rombel:</span>{' '}
-                  <strong className="text-slate-800">{meta.className || 'Semua Kelas'}</strong>
-                </div>
-                <div>
-                  <span className="font-semibold text-slate-500">Tingkat:</span>{' '}
-                  <strong className="text-slate-800">{meta.gradeLevel || 'Semua Tingkat'}</strong>
-                </div>
-                {!isAdmin && (
-                  <div>
-                    <span className="font-semibold text-slate-500">Guru Pengajar:</span>{' '}
-                    <strong className="text-slate-800">{teacherName}</strong>
-                  </div>
-                )}
-                <div>
-                  <span className="font-semibold text-slate-500">Tanggal Cetak:</span>{' '}
-                  <strong className="text-slate-800">{currentDateStr}</strong>
+                  <span className="font-semibold text-slate-600">Semester :</span>{' '}
+                  <strong className="text-slate-900">{meta.semester || 'Ganjil'}</strong>
                 </div>
               </div>
 
@@ -293,12 +282,14 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
 
                 <div className="h-16"></div>
 
-                <p className="font-extrabold text-slate-900 underline decoration-1 underline-offset-2">
-                  {headmasterName}
-                </p>
-                <p className="text-[11px] text-slate-600 mt-0.5">
-                  NUKS. {headmasterNuks}
-                </p>
+                <div>
+                  <p className="font-extrabold text-slate-900 underline decoration-1 underline-offset-2">
+                    ({headmasterName})
+                  </p>
+                  <p className="text-[11px] text-slate-700 mt-0.5 leading-none font-medium">
+                    NUKS. {headmasterNuks}
+                  </p>
+                </div>
               </div>
 
               {/* Kanan: Titimangsa & Guru */}
@@ -308,12 +299,14 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
 
                 <div className="h-16"></div>
 
-                <p className="font-extrabold text-slate-900 underline decoration-1 underline-offset-2">
-                  {teacherName}
-                </p>
-                <p className="text-[11px] text-slate-600 mt-0.5">
-                  NUPTK. {teacherNuptk}
-                </p>
+                <div>
+                  <p className="font-extrabold text-slate-900 underline decoration-1 underline-offset-2">
+                    ({teacherName})
+                  </p>
+                  <p className="text-[11px] text-slate-700 mt-0.5 leading-none font-medium">
+                    NUPTK. {teacherNuptk}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
