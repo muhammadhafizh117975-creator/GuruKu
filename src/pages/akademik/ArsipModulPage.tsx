@@ -199,7 +199,7 @@ const PdfPreviewViewer: React.FC<{ mod: TeachingModule }> = ({ mod }) => {
 
 export const ArsipModulPage: React.FC = () => {
   const { user } = useAuth();
-  const { subjects, modules, teachers, classes, addModule, updateModule, deleteModule, activeAcademicYear, academicYears } = useData();
+  const { subjects, modules, teachers, classes, addModule, updateModule, deleteModule, activeAcademicYear, academicYears, refreshData } = useData();
 
   const [activeTab, setActiveTab] = useState<'arsip' | 'upload' | 'gdrive_status'>('arsip');
   const [viewMode, setViewMode] = useState<'folder' | 'grid' | 'table'>('folder');
@@ -432,10 +432,55 @@ export const ArsipModulPage: React.FC = () => {
 
       setUploadProgress(100);
       setIsUploading(false);
+
+      // Auto refresh data from database
+      if (refreshData) {
+        await refreshData();
+      }
+
+      // Reset filters so the newly uploaded PDF is immediately visible in the list
+      setSelectedCategoryFolder(null);
+      setSearchTerm('');
+      setSelectedDocTypeFilter('all');
+      setSelectedSemesterFilter('all');
+      setSelectedLevelFilter('all');
+      setSelectedSubjectFilter('all');
+      if (isAdmin) setSelectedTeacherFilter('all');
+
+      // Construct uploaded module object for instant PDF preview
+      const uploadedMod: TeachingModule = {
+        id: `mod_${Date.now()}`,
+        title,
+        documentType,
+        subjectId,
+        subjectName,
+        classId: selectedClassId,
+        classLevel,
+        semester,
+        academicYear,
+        description,
+        fileType: 'pdf',
+        fileName: driveFile.fileName,
+        fileSize: driveFile.fileSize,
+        fileDriveId: driveFile.googleDriveFileId,
+        webViewLink: driveFile.webViewLink,
+        webContentLink: driveFile.webContentLink,
+        teacherId: targetTeacherId,
+        teacherName: targetTeacherName,
+        uploadedBy: user?.id || targetTeacherId,
+        createdAt: new Date().toISOString()
+      };
+
       setTitle('');
       setDescription('');
       setFile(null);
+
+      // Show success notification
+      showSuccessToast('✅ Upload Modul Ajar berhasil. File PDF berhasil disimpan.');
+
+      // Switch to archive tab and set preview
       setActiveTab('arsip');
+      setPreviewModule(uploadedMod);
     } catch (error: any) {
       setIsUploading(false);
       setUploadProgress(0);

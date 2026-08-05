@@ -22,15 +22,54 @@ import { ProfilPage } from './pages/pengaturan/ProfilPage';
 import { PanduanAdminPage } from './pages/panduan/PanduanAdminPage';
 import { PanduanGuruPage } from './pages/panduan/PanduanGuruPage';
 
+const getInitialTab = (): string => {
+  try {
+    const hash = window.location.hash.replace('#', '').trim();
+    if (hash && hash !== 'login') {
+      return hash;
+    }
+    const savedSession = sessionStorage.getItem('guruku_active_tab');
+    if (savedSession && savedSession !== 'login') {
+      return savedSession;
+    }
+    const savedLocal = localStorage.getItem('guruku_active_tab');
+    if (savedLocal && savedLocal !== 'login') {
+      return savedLocal;
+    }
+  } catch (e) {
+    console.warn('Failed reading initial active tab:', e);
+  }
+  return 'dashboard';
+};
+
 const AppContent: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [activeTab, setActiveTab] = useState<string>(getInitialTab);
 
   React.useEffect(() => {
-    if (user) {
-      setActiveTab('dashboard');
+    if (user && activeTab && activeTab !== 'login') {
+      try {
+        sessionStorage.setItem('guruku_active_tab', activeTab);
+        localStorage.setItem('guruku_active_tab', activeTab);
+        if (window.location.hash !== `#${activeTab}`) {
+          window.history.replaceState(null, '', `#${activeTab}`);
+        }
+      } catch (e) {
+        console.warn('Failed persisting active tab:', e);
+      }
     }
-  }, [user?.id]);
+  }, [user, activeTab]);
+
+  React.useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '').trim();
+      if (hash && hash !== 'login') {
+        setActiveTab(hash);
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   React.useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark') ||
@@ -51,7 +90,7 @@ const AppContent: React.FC = () => {
       case 'dashboard':
         return <DashboardPage setActiveTab={setActiveTab} />;
       case 'guru':
-        return <GuruPage />;
+        return user.role === 'admin' ? <GuruPage /> : <DashboardPage setActiveTab={setActiveTab} />;
       case 'mapel':
       case 'mata-pelajaran':
         return <MataPelajaranPage />;
@@ -76,7 +115,7 @@ const AppContent: React.FC = () => {
         return <LaporanJurnalPage />;
       case 'pengaturan':
       case 'pengaturan-sistem':
-        return <PengaturanSistemPage />;
+        return user.role === 'admin' ? <PengaturanSistemPage /> : <DashboardPage setActiveTab={setActiveTab} />;
       case 'panduan-admin':
         return <PanduanAdminPage />;
       case 'panduan-guru':

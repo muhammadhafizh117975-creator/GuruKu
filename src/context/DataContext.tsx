@@ -55,6 +55,7 @@ interface DataContextType {
   isRealtimeConnected: boolean;
 
   // Actions
+  refreshData: () => Promise<void>;
   addPrincipal: (p: Omit<SchoolPrincipal, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updatePrincipal: (id: string, p: Partial<SchoolPrincipal>) => Promise<void>;
   deletePrincipal: (id: string) => Promise<void>;
@@ -479,6 +480,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             updatedAt: m.updated_at
           };
         });
+        fetchedModules.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setModules(fetchedModules);
       }
 
@@ -2082,6 +2084,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         notifications,
         unreadCount,
         isRealtimeConnected,
+        refreshData: loadDataFromSupabase,
         addPrincipal,
         updatePrincipal,
         deletePrincipal,

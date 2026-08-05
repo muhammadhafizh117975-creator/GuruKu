@@ -146,6 +146,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setUser(null);
     localStorage.removeItem('guruku_session_user');
+    localStorage.removeItem('guruku_active_tab');
+    sessionStorage.removeItem('guruku_active_tab');
+    if (window.location.hash) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
     showSuccessToast('Berhasil keluar dari sesi.');
   };
 
