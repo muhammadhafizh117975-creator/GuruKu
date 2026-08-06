@@ -595,6 +595,17 @@ CREATE TABLE IF NOT EXISTS public.teaching_modules (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.teaching_modules ADD COLUMN IF NOT EXISTS folder_type TEXT;
+ALTER TABLE public.teaching_modules ADD COLUMN IF NOT EXISTS document_type TEXT;
+ALTER TABLE public.teaching_modules ADD COLUMN IF NOT EXISTS teacher_name TEXT;
+ALTER TABLE public.teaching_modules ADD COLUMN IF NOT EXISTS subject_name TEXT;
+ALTER TABLE public.teaching_modules ADD COLUMN IF NOT EXISTS class_id TEXT;
+ALTER TABLE public.teaching_modules ADD COLUMN IF NOT EXISTS storage_path TEXT;
+ALTER TABLE public.teaching_modules ADD COLUMN IF NOT EXISTS file_url TEXT;
+ALTER TABLE public.teaching_modules ADD COLUMN IF NOT EXISTS mime_type TEXT DEFAULT 'application/pdf';
+ALTER TABLE public.teaching_modules ADD COLUMN IF NOT EXISTS created_by TEXT;
+ALTER TABLE public.teaching_modules ADD COLUMN IF NOT EXISTS updated_by TEXT;
+
 DROP TRIGGER IF EXISTS set_teaching_modules_updated_at ON public.teaching_modules;
 CREATE TRIGGER set_teaching_modules_updated_at
   BEFORE UPDATE ON public.teaching_modules
@@ -798,6 +809,9 @@ CREATE INDEX IF NOT EXISTS idx_attendance_class_id ON public.attendance(class_id
 CREATE INDEX IF NOT EXISTS idx_attendance_subject_id ON public.attendance(subject_id);
 CREATE INDEX IF NOT EXISTS idx_journals_date ON public.teaching_journals(date);
 CREATE INDEX IF NOT EXISTS idx_modules_subject_id ON public.teaching_modules(subject_id);
+CREATE INDEX IF NOT EXISTS idx_modules_folder_type ON public.teaching_modules(folder_type);
+CREATE INDEX IF NOT EXISTS idx_modules_teacher_id ON public.teaching_modules(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_modules_semester ON public.teaching_modules(semester);
 CREATE INDEX IF NOT EXISTS idx_principals_is_active ON public.school_principals(is_active);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON public.notifications(is_read);

@@ -455,7 +455,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return {
             id: m.id,
             title: m.title,
-            documentType: m.document_type || m.documentType || 'Modul Ajar',
+            documentType: m.folder_type || m.document_type || m.documentType || 'Modul Ajar',
             folderId: m.folder_id || m.folderId,
             subjectId: m.subject_id || m.subjectId || '',
             subjectName: subject?.name || m.subject_name || 'Mata Pelajaran',
@@ -471,8 +471,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             fileDriveId: m.google_drive_file_id || m.drive_file_id || m.file_drive_id || m.id,
             driveFolderId: m.drive_folder_id || m.google_drive_folder_id,
             folderPath: m.folder_path,
-            webViewLink: m.preview_url || m.drive_url || m.web_view_link || m.google_drive_url || '#',
-            webContentLink: m.download_url || m.web_content_link || m.drive_url || m.web_view_link || '#',
+            webViewLink: m.preview_url || m.drive_url || m.web_view_link || m.file_url || m.google_drive_url || '#',
+            webContentLink: m.download_url || m.web_content_link || m.file_url || m.drive_url || m.web_view_link || '#',
             teacherId: m.teacher_id || m.uploaded_by || 'global_teacher',
             teacherName: teacher?.fullName || m.teacher_name || 'Guru Pengajar',
             uploadedBy: m.uploaded_by || m.teacher_id,
@@ -1605,19 +1605,30 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await client.from('teaching_modules').insert([{
         id: newModId,
         title: mod.title,
+        teacher_id: mod.teacherId || null,
+        teacher_name: mod.teacherName || '',
         subject_id: mod.subjectId || null,
+        subject_name: mod.subjectName || '',
+        class_id: mod.classId || mod.classLevel || '',
         class_level: mod.classLevel,
         semester: mod.semester,
+        folder_type: mod.documentType || 'Modul Ajar',
+        document_type: mod.documentType || 'Modul Ajar',
         academic_year: mod.academicYear,
         description: mod.description || '',
-        file_type: mod.fileType,
+        file_type: mod.fileType || 'pdf',
         file_name: mod.fileName,
         file_size: mod.fileSize || '',
+        mime_type: mod.mimeType || 'application/pdf',
         file_drive_id: mod.fileDriveId,
+        storage_path: mod.folderPath || mod.fileDriveId,
+        file_url: mod.webViewLink,
         web_view_link: mod.webViewLink,
         web_content_link: mod.webContentLink,
-        teacher_id: mod.teacherId || null,
-        created_at: new Date().toISOString()
+        created_by: mod.uploadedBy || mod.teacherId || null,
+        updated_by: mod.uploadedBy || mod.teacherId || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       }]);
 
       await loadDataFromSupabase();
@@ -1657,7 +1668,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       if (updatedMod.semester !== undefined) updatePayload.semester = updatedMod.semester;
       if (updatedMod.academicYear !== undefined) updatePayload.academic_year = updatedMod.academicYear;
-      if (updatedMod.documentType !== undefined) updatePayload.document_type = updatedMod.documentType;
+      if (updatedMod.documentType !== undefined) {
+        updatePayload.document_type = updatedMod.documentType;
+        updatePayload.folder_type = updatedMod.documentType;
+      }
       if (updatedMod.fileName !== undefined) {
         updatePayload.file_name = updatedMod.fileName;
         updatePayload.filename = updatedMod.fileName;
@@ -2115,6 +2129,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addJournal,
         deleteJournal,
         addModule,
+        updateModule,
         deleteModule,
         updateSystemSettings,
         assignTeacherToSubjectsAndClasses,
